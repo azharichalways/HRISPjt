@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absensi Geoface V9 — PT Putra Jaya Telesindo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<style>
+  :root {
+    --bg-main: #f8fafc;
+    --surface: #ffffff;
+    --surface-secondary: #f1f5f9;
+    --border: #e2e8f0;
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --brand-primary: #2563eb;
+    --brand-hover: #1d4ed8;
+    --brand-bg-light: #eff6ff;
+    --status-positive: #10b981;
+    --status-positive-bg: #ecfdf5;
+    --status-warning: #f59e0b;
+    --status-warning-bg: #fffbeb;
+    --status-negative: #ef4444;
+    --status-negative-bg: #fef2f2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  #app {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  .topbar {
+    padding: 10px 16px 8px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .topbar .who .nama { font-size: 13.5px; font-weight: 700; color: var(--text-main); }
+  .topbar .who .sub { font-size: 10.5px; color: var(--text-dim); margin-top: 1px; }
+  .topbar .clock { font-size: 15px; font-weight: 600; text-align: right; color: var(--brand-primary); }
+  .topbar .clock .date { font-size: 10px; color: var(--text-dim); font-weight: 400; margin-top: 1px; }
+
+  .gamify-bar {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #ffffff;
+    padding: 6px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+
+  .gamify-badge {
+    background: rgba(255,255,255,0.15);
+    padding: 2px 6px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .broadcast-banner {
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+    color: #92400e;
+    padding: 8px 16px;
+    font-size: 11.5px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px 94px;
+  }
+
+  h2.section-title {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-weight: 700;
+    margin: 14px 0 7px;
+    letter-spacing: 0.5px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px;
+    margin-bottom: 9px;
+    transition: all 0.2s ease;
+  }
+
+  .card.approved-border { border: 2px solid #10b981; background: #ecfdf5; }
+
+  .btn {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: none;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    background: var(--brand-primary);
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: var(--brand-hover); }
+  .btn.secondary { background: var(--surface-secondary); color: var(--text-main); border: 1px solid var(--border); }
+  .btn.danger { background: var(--status-negative); color: #fff; }
+  .btn.success { background: var(--status-positive); color: #fff; }
+
+  input, textarea, select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 13px;
+    margin-bottom: 10px;
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--brand-primary); background: #fff; }
+  label { font-size: 11.5px; font-weight: 600; color: var(--text-dim); display: block; margin-bottom: 4px; }
+
+  .bottomnav {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 5px 3px calc(5px + env(safe-area-inset-bottom));
+    z-index: 40;
+    box-shadow: 0 -8px 22px rgba(15,23,42,.06);
+    gap: 4px;
+  }
+  .navbtn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 5px 2px;
+    cursor: pointer;
+    border-radius: 12px;
+    min-height: 48px;
+  }
+  .navbtn.active { background: linear-gradient(135deg,#eff6ff,#eef2ff); color: #1d4ed8; }
+  .navbtn svg { width: 17px; height: 17px; }
+
+  .subnav-tabs {
+    display: flex;
+    gap: 6px;
+    background: var(--surface-secondary);
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+  .subnav-btn {
+    flex: 1;
+    padding: 8px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-align: center;
+  }
+  .subnav-btn.active {
+    background: var(--surface);
+    color: var(--brand-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  .shift-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .shift-tile {
+    background: var(--surface-secondary);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .shift-tile.selected { border-color: var(--brand-primary); background: var(--brand-bg-light); }
+  .shift-tile .label { font-weight: 700; font-size: 13px; color: var(--text-main); }
+  .shift-tile .time { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .typechoice { display: flex; gap: 8px; margin-bottom: 12px; }
+  .typechoice button {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1.5px solid var(--border);
+    background: var(--surface-secondary); color: var(--text-dim); font-weight: 600; font-size: 12.5px;
+  }
+  .typechoice button.selected { border-color: var(--brand-primary); background: var(--brand-bg-light); color: var(--brand-primary); }
+
+  .location-badge {
+    padding: 8px 12px; border-radius: 8px; font-size: 11.5px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  }
+  .location-badge.valid { background: var(--status-positive-bg); color: var(--status-positive); border: 1px solid #a7f3d0; }
+  .location-badge.invalid { background: var(--status-negative-bg); color: var(--status-negative); border: 1px solid #fca5a5; }
+
+  .camera-wrap {
+    position: relative; width: 100%; aspect-ratio: 16/9; max-height: 210px; background: #0f172a;
+    border-radius: 14px; overflow: hidden; margin-bottom: 8px; border: 1px solid #1e293b;
+  }
+  .camera-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .role-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+  .role-karyawan { background: #e0e7ff; color: #3730a3; }
+  .role-leader { background: #fef3c7; color: #92400e; }
+  .role-hr { background: #fce7f3; color: #9d174d; }
+
+  .empty { text-align: center; padding: 30px 10px; color: var(--text-dim); font-size: 12px; }
+
+  .toast {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    width: calc(100% - 32px); max-width: 440px; background: #1e293b; color: #fff;
+    padding: 12px 16px; border-radius: 10px; font-size: 12.5px; font-weight: 500;
+    z-index: 100; display: none; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+  }
+
+  .loading-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.4);
+    display: flex; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(2px);
+  }
+  .spinner {
+    width: 38px; height: 38px; border: 4px solid #ffffff;
+    border-top-color: var(--brand-primary); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .auth-card {
+    padding: 30px 24px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+  }
+  .auth-card h1 { font-size: 20px; font-weight: 800; color: var(--brand-primary); margin-bottom: 4px; }
+  .auth-card p { font-size: 12px; color: var(--text-dim); margin-bottom: 24px; }
+
+  .home-hero {
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 72%);
+    border: 1px solid #dbeafe; border-radius: 14px; padding: 14px; margin-bottom: 12px;
+  }
+  .home-hero .eyebrow { font-size: 10px; font-weight: 700; color: var(--brand-primary); text-transform: uppercase; letter-spacing:.6px; }
+  .home-hero .title { font-size: 18px; font-weight: 800; margin-top: 3px; line-height:1.2; }
+  .home-hero .desc { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height:1.45; }
+  .home-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .home-tile {
+    position:relative; border:1px solid var(--border); background:#fff; border-radius:12px;
+    padding:12px; min-height:84px; cursor:pointer; text-align:left; transition:.18s ease;
+  }
+  .home-tile:hover { border-color:#bfdbfe; transform:translateY(-1px); }
+  .home-tile .icon { font-size:20px; margin-bottom:7px; }
+  .home-tile .title { font-size:12px; font-weight:800; }
+  .home-tile .desc { font-size:10px; color:var(--text-dim); margin-top:2px; line-height:1.3; }
+
+  .home-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:10px; }
+  .mini-stat { background:#fff; border:1px solid var(--border); border-radius:10px; padding:8px 6px; text-align:center; }
+  .mini-stat .value { font-size:15px; font-weight:800; color:var(--brand-primary); }
+  .mini-stat .label { font-size:9px; color:var(--text-dim); margin-top:2px; }
+
+  .v4-section-head { display:flex; align-items:center; justify-content:space-between; margin:4px 0 9px; }
+  .v4-back { border:0; background:transparent; color:#2563eb; font-size:10px; font-weight:700; cursor:pointer; }
+  ::-webkit-scrollbar { width: 0px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="toast" id="toast"></div>
+  <div class="loading-overlay" id="loadingOverlay" style="display:none;"><div class="spinner"></div></div>
+
+  <!-- AUTH SCREEN -->
+  <div id="authScreen" class="auth-card" style="display:none;">
+    <h1>Absensi Geoface</h1>
+    <p>PT Putra Jaya Telesindo — Presensi & Kinerja</p>
+    <div class="subnav-tabs">
+      <button class="subnav-btn active" id="tabBtnLogin">🔑 Masuk (PIN 3 Angka)</button>
+    </div>
+    <div id="authLoginTab">
+      <label>Kode Unik (3 Angka)</label>
+      <input id="loginKode" class="mono" maxlength="3" placeholder="cth. 123" inputmode="numeric">
+      <label>Password (2 Karakter)</label>
+      <input id="loginPass" class="mono" maxlength="2" type="password" placeholder="cth. 12">
+      <button class="btn" onclick="loginUser()">Masuk ke Aplikasi</button>
+      <div style="font-size:11px; color:var(--text-dim); text-align:center; margin-top:16px;">
+        💡 <em>Akun dibuat resmi oleh HR Admin. Hubungi HR jika belum memiliki Kode Unik.</em>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP SCREEN -->
+  <div id="mainScreen" style="display:none; flex-direction:column; min-height:100vh;">
+    <div class="topbar">
+      <div class="who">
+        <div class="nama" id="hdrNama">—</div>
+        <div class="sub" id="hdrSub">—</div>
+      </div>
+      <div class="clock">
+        <div class="mono" id="liveClock">00:00:00</div>
+        <div class="date" id="liveDate">—</div>
+      </div>
+    </div>
+
+    <div class="gamify-bar">
+      <span class="gamify-badge">🔥 Streak: <strong id="barStreak">0</strong> Hari</span>
+      <span class="gamify-badge">⭐ XP: <strong id="barXP">0</strong></span>
+      <span class="gamify-badge" id="barBadge">🏆 Pemula</span>
+    </div>
+
+    <div id="broadcastBanner" class="broadcast-banner" style="display:none;">
+      <span>📢</span> <span id="broadcastText"></span>
+    </div>
+
+    <div id="content"></div>
+    <div class="bottomnav" id="bottomNav"></div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// CONFIG & STATE
+// ==========================================
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbz-U6AupOTWqZS7s2yoYsU5oBu8SYF2DrS0trvbjpXQfxjriJxIWH2Nmtuboih40Aq8/exec"; // <-- MASUKKAN URL DEPLOYMENT GAS DI SINI
+const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
+const MAX_DISTANCE_METERS = 300;
+
+const SHIFTS = {
+  pagi:   { label: 'Pagi',   start: '07:00', end: '15:00', briefing: '06:45' },
+  middle: { label: 'Middle', start: '13:00', end: '21:00', briefing: null },
+  sore:   { label: 'Sore',   start: '15:00', end: '23:00', briefing: '14:45' },
+  malam:  { label: 'Malam',  start: '23:00', end: '07:00', briefing: null }
+};
+
+let state = {
+  activeProfile: null,
+  records: [],
+  activities: [],
+  halBaik: [],
+  ideas: [],
+  leaves: [],
+  announcements: [],
+  agendas: [],
+  agendaUserStatus: {},
+  allUsers: [],
+  selectedShift: 'pagi',
+  selectedType: 'masuk',
+  coords: { lat: null, lng: null },
+  distanceToOffice: null,
+  stream: null,
+  currentTab: 'home',
+  agendaSubTab: 'agenda'
+};
+
+// ==========================================
+// API HELPER (COMMUNICATION WITH GAS)
+// ==========================================
+async function callGAS(action, payload = {}) {
+  showLoading(true);
+  try {
+    const response = await fetch(GAS_API_URL, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, payload })
+    });
+    const res = await response.json();
+    showLoading(false);
+    return res;
+  } catch (err) {
+    showLoading(false);
+    console.error("API Error:", err);
+    showToast("⚠️ Gagal berkomunikasi dengan server.");
+    return null;
+  }
+}
+
+function showLoading(show) {
+  document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+}
+
+// ==========================================
+// INIT & AUTH
+// ==========================================
+function initData() {
+  const activeSession = localStorage.getItem('active_user_session');
+  if (activeSession) {
+    state.activeProfile = JSON.parse(activeSession);
+    bootstrapApp();
+  } else {
+    showAuthScreen();
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+  initLocationWatcher();
+}
+
+async function bootstrapApp() {
+  if (!state.activeProfile) return;
+  const res = await callGAS('bootstrap', { nik: state.activeProfile.nik });
+  if (res && res.ok && res.bootstrap) {
+    const b = res.bootstrap;
+    state.records = b.records || [];
+    state.activities = b.activities || [];
+    state.halBaik = b.goodDeeds || [];
+    state.ideas = b.ideas || [];
+    state.leaves = b.leaves || [];
+    state.announcements = b.announcements || [];
+    state.agendas = b.agendas || [];
+    state.allUsers = b.users || [];
+    if (res.user) state.activeProfile = res.user;
+    showMainScreen();
+  } else {
+    showAuthScreen();
+  }
+}
+
+async function loginUser() {
+  const kode = document.getElementById('loginKode').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
+  if (!kode || !pass) {
+    showToast('⚠️ Silakan isi Kode Unik & Password.');
+    return;
+  }
+
+  const res = await callGAS('login', { kodeUnik: kode, passCode: pass });
+  if (res && res.ok) {
+    state.activeProfile = res.user;
+    localStorage.setItem('active_user_session', JSON.stringify(res.user));
+    const b = res.bootstrap;
+    state.records = b.records || [];
+    state.activities = b.activities || [];
+    state.halBaik = b.goodDeeds || [];
+    state.ideas = b.ideas || [];
+    state.leaves = b.leaves || [];
+    state.announcements = b.announcements || [];
+    state.agendas = b.agendas || [];
+    state.allUsers = b.users || [];
+    showMainScreen();
+    showToast('🎉 Selamat datang, ' + res.user.nama + '!');
+  } else {
+    showToast('❌ ' + (res?.error || 'Login gagal.'));
+  }
+}
+
+function logoutUser() {
+  stopCamera();
+  localStorage.removeItem('active_user_session');
+  state.activeProfile = null;
+  showAuthScreen();
+}
+
+function showAuthScreen() {
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+}
+
+function showMainScreen() {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'flex';
+
+  const u = state.activeProfile;
+  document.getElementById('hdrNama').innerHTML = `${u.nama} <span class="role-badge role-${u.role}">${u.role}</span>`;
+  document.getElementById('hdrSub').textContent = `${u.brand} • NIK ${u.nik}`;
+
+  updateGamifyBar();
+  renderBottomNav();
+  switchTab('home');
+}
+
+function updateGamifyBar() {
+  const u = state.activeProfile;
+  document.getElementById('barStreak').textContent = u.streak || 0;
+  document.getElementById('barXP').textContent = u.xp || 0;
+  let badge = '🏆 Pemula';
+  if (u.xp >= 300) badge = '👑 Legenda';
+  else if (u.xp >= 150) badge = '⭐ Hero Tim';
+  else if (u.xp >= 50) badge = '🥇 Disiplin';
+  document.getElementById('barBadge').textContent = badge;
+}
+
+// ==========================================
+// NAVIGATION & VIEWS
+// ==========================================
+function renderBottomNav() {
+  const nav = document.getElementById('bottomNav');
+  const role = state.activeProfile.role;
+  const icon = {
+    home: `<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>`,
+    absen: `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>`,
+    agenda: `<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>`,
+    profil: `<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>`
+  };
+  let items = [
+    {id:'home',label:'Beranda',icon:icon.home},
+    {id:'absen',label:'Absen',icon:icon.absen},
+    {id:'agenda',label:'Agenda',icon:icon.agenda},
+    {id:'profil',label:'Profil',icon:icon.profil}
+  ];
+
+  nav.innerHTML = items.map(item => `
+    <button class="navbtn ${state.currentTab === item.id ? 'active' : ''}" onclick="switchTab('${item.id}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
+      <span>${item.label}</span>
+    </button>
+  `).join('');
+}
+
+function switchTab(tab) {
+  state.currentTab = tab;
+  stopCamera();
+  renderBottomNav();
+  if (tab === 'home') renderHomeTab();
+  else if (tab === 'absen') renderAbsenTab();
+  else if (tab === 'agenda') renderAgendaTab();
+  else if (tab === 'profil') renderProfilTab();
+}
+
+function renderHomeTab() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="home-hero">
+      <div class="eyebrow">Beranda</div>
+      <div class="title">Halo, ${state.activeProfile.nama}</div>
+      <div class="desc">Aplikasi Absensi & Performa PT Putra Jaya Telesindo</div>
+      <div class="home-summary">
+        <div class="mini-stat"><div class="value">${state.activeProfile.xp || 0}</div><div class="label">XP</div></div>
+        <div class="mini-stat"><div class="value">🔥 ${state.activeProfile.streak || 0}</div><div class="label">Streak</div></div>
+        <div class="mini-stat"><div class="value">${state.records.length}</div><div class="label">Presensi</div></div>
+      </div>
+    </div>
+    <div class="home-section-title">Menu Utama</div>
+    <div class="home-grid">
+      <button class="home-tile" onclick="switchTab('absen')"><div class="icon">📍</div><div class="title">Presensi GPS</div><div class="desc">Absen masuk & pulang</div></button>
+      <button class="home-tile" onclick="switchTab('agenda')"><div class="icon">📅</div><div class="title">Agenda Kerja</div><div class="desc">Lihat jadwal kegiatan</div></button>
+      <button class="home-tile" onclick="switchTab('profil')"><div class="icon">👤</div><div class="title">Profil Saya</div><div class="desc">Info akun & performa</div></button>
+    </div>
+  `;
+}
+
+// ==========================================
+// ATTENDANCE & CAMERA
+// ==========================================
+function renderAbsenTab() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div id="locationBadge" class="location-badge invalid"><span>📍</span> Memeriksa Lokasi GPS...</div>
+    <h2 class="section-title">Aksi Presensi</h2>
+    <div class="typechoice">
+      <button class="${state.selectedType === 'masuk' ? 'selected' : ''}" onclick="state.selectedType='masuk';renderAbsenTab();">Absen Masuk</button>
+      <button class="${state.selectedType === 'pulang' ? 'selected' : ''}" onclick="state.selectedType='pulang';renderAbsenTab();">Absen Pulang</button>
+    </div>
+    <h2 class="section-title">Pilih Shift Kerja</h2>
+    <div class="shift-grid">
+      ${Object.entries(SHIFTS).map(([k,s]) => `
+        <div class="shift-tile ${state.selectedShift === k ? 'selected' : ''}" onclick="state.selectedShift='${k}';renderAbsenTab();">
+          <div class="label">${s.label}</div>
+          <div class="time mono">${s.start} - ${s.end}</div>
+        </div>
+      `).join('')}
+    </div>
+    <div id="cameraSlot">
+      <h2 class="section-title">Foto Tagging Realtime</h2>
+      <div class="camera-wrap"><video id="camVideo" autoplay playsinline muted></video></div>
+      <button class="btn" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button>
+    </div>
+  `;
+  updateLocationBadgeUI();
+  startCamera();
+}
+
+function startCamera() {
+  stopCamera();
+  const video = document.getElementById('camVideo');
+  if (!video) return;
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      .then(s => { state.stream = s; video.srcObject = s; })
+      .catch(err => console.warn('Kamera tidak tersedia:', err));
+  }
+}
+
+function stopCamera() {
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+}
+
+function initLocationWatcher() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition(pos => {
+      state.coords.lat = pos.coords.latitude;
+      state.coords.lng = pos.coords.longitude;
+      state.distanceToOffice = getDistanceInMeters(state.coords.lat, state.coords.lng, OFFICE_COORDS.lat, OFFICE_COORDS.lng);
+      updateLocationBadgeUI();
+    }, err => updateLocationBadgeUI(), { enableHighAccuracy: true });
+  }
+}
+
+function getDistanceInMeters(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1) return null;
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return Math.round(R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))));
+}
+
+function updateLocationBadgeUI() {
+  const badge = document.getElementById('locationBadge');
+  if (!badge) return;
+  if (state.selectedShift === 'malam') {
+    badge.className = 'location-badge valid'; badge.innerHTML = `<span>🌙</span> Shift Malam: Bebas Lokasi Kantor`;
+  } else if (state.distanceToOffice === null) {
+    badge.className = 'location-badge invalid'; badge.innerHTML = `<span>📍</span> GPS Mencari Lokasi...`;
+  } else if (state.distanceToOffice <= MAX_DISTANCE_METERS) {
+    badge.className = 'location-badge valid'; badge.innerHTML = `<span>🟢</span> Lokasi Valid: <strong>${state.distanceToOffice}m</strong> dari kantor`;
+  } else {
+    badge.className = 'location-badge invalid'; badge.innerHTML = `<span>⛔</span> Di Luar Jangkauan: <strong>${state.distanceToOffice}m</strong> (Maks 300m)`;
+  }
+}
+
+async function capturePhotoAndAbsen() {
+  if (state.selectedShift !== 'malam' && (state.distanceToOffice === null || state.distanceToOffice > MAX_DISTANCE_METERS)) {
+    showToast(`⛔ Presensi Ditolak! Jarak (${state.distanceToOffice || 0}m) melebihi batas 300m.`);
+    return;
+  }
+
+  const now = new Date();
+  const timeStr = now.toTimeString().slice(0, 5);
+  let statusText = 'Tepat Waktu', xpEarned = 50;
+
+  const payload = {
+    nik: state.activeProfile.nik,
+    shift: state.selectedShift,
+    type: state.selectedType,
+    statusText: statusText,
+    lat: state.coords.lat,
+    lng: state.coords.lng,
+    distanceM: state.distanceToOffice,
+    xpEarned: xpEarned
+  };
+
+  const res = await callGAS('addAttendance', payload);
+  if (res && res.ok) {
+    stopCamera();
+    if (res.user) state.activeProfile = res.user;
+    updateGamifyBar();
+    showToast(`🎉 Presensi Berhasil! +${xpEarned} XP`);
+    switchTab('home');
+  }
+}
+
+// ==========================================
+// AGENDA & PROFIL
+// ==========================================
+function renderAgendaTab() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div class="v4-section-head"><strong>📅 Agenda Perusahaan</strong></div>
+    <div class="card">
+      ${state.agendas.length ? state.agendas.map(a => `
+        <div style="border-bottom:1px solid var(--border); padding:8px 0;">
+          <div style="font-weight:700;">${a.title}</div>
+          <div style="font-size:11px; color:var(--text-dim);">📅 ${a.date} • ⏰ ${a.time || '-'} • 📍 ${a.location || '-'}</div>
+        </div>
+      `).join('') : '<div class="empty">Belum ada agenda aktif.</div>'}
+    </div>
+  `;
+}
+
+function renderProfilTab() {
+  const c = document.getElementById('content');
+  const u = state.activeProfile;
+  c.innerHTML = `
+    <div class="card">
+      <div style="font-size:16px; font-weight:800;">${u.nama}</div>
+      <div style="font-size:12px; color:var(--text-dim);">${u.brand} • NIK ${u.nik}</div>
+      <div style="margin-top:10px;"><span class="role-badge role-${u.role}">${u.role}</span></div>
+    </div>
+    <button class="btn danger" onclick="logoutUser()">🚪 Keluar / Ganti Akun</button>
+  `;
+}
+
+// ==========================================
+// UTILS
+// ==========================================
+function tickClock() {
+  const now = new Date();
+  const clock = document.getElementById('liveClock');
+  const date = document.getElementById('liveDate');
+  if (clock) clock.textContent = now.toLocaleTimeString('id-ID', { hour12: false });
+  if (date) date.textContent = now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 4000);
+}
+
+window.onload = function() { initData(); };
+</script>
+</body>
+</html>
