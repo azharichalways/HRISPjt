@@ -477,7 +477,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz-U6AupOTWqZS7s2yoYsU5oBu8SYF2DrS0trvbjpXQfxjriJxIWH2Nmtuboih40Aq8/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxxfpsB8jomGh0OVOqQWVHcZ6Bux7AE8BCFtT1w3_Tm58VC49faS2dwIXc6ZIjksD8w/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -494,6 +494,161 @@ async function gasCall(action, payload) {
     console.warn('gasCall gagal:', action, err);
     return { ok: false, error: 'Tidak bisa menghubungi server: ' + (err.message || err) };
   }
+}
+
+// Ubah hasil bootstrap dari server (kolom Sheet snake_case) jadi bentuk cache localStorage yang dipakai app (camelCase),
+// lalu tulis ke localStorage supaya seluruh fungsi render yang sudah ada (baca dari localStorage) otomatis dapat data terbaru.
+function mapBootstrapToCaches(bs) {
+  // Users: gabung (upsert), jangan hapus akun lain yang mungkin sudah di-cache.
+  if (Array.isArray(bs.users)) {
+    initUsers();
+    bs.users.forEach(su => {
+      const idx = state.allUsers.findIndex(x => x.nik === su.nik);
+      if (idx >= 0) state.allUsers[idx] = { ...state.allUsers[idx], ...su };
+      else state.allUsers.push(su);
+    });
+    localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+  }
+
+  // Records & Activities: per-nik, dikelompokkan dulu sebelum ditulis ke masing-masing cache 'records_<nik>' / 'activities_<nik>'.
+  if (Array.isArray(bs.records)) {
+    const byNik = {};
+    bs.records.forEach(r => {
+      const nik = String(r.nik);
+      (byNik[nik] = byNik[nik] || []).push({
+        id: r.id, date: r.date, time: r.time, shift: r.shift, type: r.type,
+        statusText: r.status_text, lat: r.lat, lng: r.lng, xpEarned: num_(r.xp_earned), role: r.role, photo: null
+      });
+    });
+    Object.keys(byNik).forEach(nik => {
+      byNik[nik].sort((a, b) => (b.id || 0) - (a.id || 0));
+      localStorage.setItem('records_' + nik, JSON.stringify(byNik[nik]));
+    });
+  }
+  if (Array.isArray(bs.activities)) {
+    const byNik = {};
+    bs.activities.forEach(a => {
+      const nik = String(a.nik);
+      (byNik[nik] = byNik[nik] || []).push({ id: a.id, date: a.date, time: a.time || '', type: a.type, note: a.note, xpEarned: num_(a.xp_earned) });
+    });
+    Object.keys(byNik).forEach(nik => {
+      byNik[nik].sort((a, b) => (b.id || 0) - (a.id || 0));
+      localStorage.setItem('activities_' + nik, JSON.stringify(byNik[nik]));
+    });
+  }
+
+  // GoodDeeds (Hal Baik)
+  if (Array.isArray(bs.goodDeeds)) {
+    const mapped = bs.goodDeeds.map(h => ({
+      id: h.id, date: h.date, title: h.title, essay: h.essay, status: h.status,
+      leaderNote: h.leader_note || '-', xpAwarded: truthy_(h.xp_awarded),
+      nik: h.nik, nama: h.nama, brand: h.brand, leaderNik: h.leader_nik || ''
+    }));
+    localStorage.setItem('halbaik_all', JSON.stringify(mapped));
+  }
+
+  // Ideas
+  if (Array.isArray(bs.ideas)) {
+    const mapped = bs.ideas.map(i => ({
+      id: i.id, date: i.date, time: i.time || '', title: i.title, desc: i.description, status: i.status,
+      leaderNote: i.leader_note || '-', hrNote: i.hr_note || '-', slaStatus: i.sla_status || '',
+      ideaSubmitXpAwarded: truthy_(i.submit_xp_awarded), leaderStageXpAwarded: truthy_(i.leader_stage_xp_awarded),
+      hrAcceptedXpAwarded: truthy_(i.hr_accepted_xp_awarded), implementedXpAwarded: truthy_(i.implemented_xp_awarded),
+      nik: i.nik, nama: i.nama, role: i.role, brand: i.brand, leaderNik: i.leader_nik || ''
+    }));
+    localStorage.setItem('ideas_all', JSON.stringify(mapped));
+  }
+
+  // Leaves
+  if (Array.isArray(bs.leaves)) {
+    const mapped = bs.leaves.map(l => ({
+      id: l.id, start: l.start_date, end: l.end_date, ket: l.reason, status: l.status,
+      nik: l.nik, nama: l.nama, leaderNik: l.leader_nik || ''
+    }));
+    localStorage.setItem('leaves_all', JSON.stringify(mapped));
+  }
+
+  // Announcements
+  if (Array.isArray(bs.announcements)) {
+    const mapped = bs.announcements.map(a => ({ id: a.id, date: a.date, text: a.text, expiresAt: a.expires_at || null }));
+    localStorage.setItem('announcements_all', JSON.stringify(mapped));
+  }
+
+  // Agendas — hrXpBonus adalah field khusus app (tidak ada di Sheet), jadi dipertahankan dari cache lokal lama kalau ada.
+  if (Array.isArray(bs.agendas)) {
+    let oldAgendas = [];
+    try { oldAgendas = JSON.parse(localStorage.getItem('agendas_all') || '[]'); } catch (_) {}
+    const mapped = bs.agendas.map(a => {
+      const old = oldAgendas.find(x => String(x.id) === String(a.id));
+      return {
+        id: a.id, title: a.title, date: a.date, time: a.time, location: a.location,
+        xpBonus: num_(a.xp_bonus), hrXpBonus: old?.hrXpBonus || 0,
+        scope: a.scope || 'company', teamLeaderNik: a.team_leader_nik || '', creatorNik: a.created_by || ''
+      };
+    });
+    localStorage.setItem('agendas_all', JSON.stringify(mapped));
+  }
+
+  // Status ikut/tidak agenda — time & xpAward tidak ada di Sheet, dipertahankan dari cache lokal lama.
+  if (Array.isArray(bs.agendaStatus)) {
+    let old = {};
+    try { old = JSON.parse(localStorage.getItem('agenda_user_status_all') || '{}'); } catch (_) {}
+    const mapped = {};
+    bs.agendaStatus.forEach(s => {
+      mapped[s.key] = { status: s.status, date: s.date, time: old[s.key]?.time || '', xpAward: old[s.key]?.xpAward || 0 };
+    });
+    localStorage.setItem('agenda_user_status_all', JSON.stringify(mapped));
+  }
+
+  // Pesan pribadi HR
+  if (Array.isArray(bs.privateMessages)) {
+    const mapped = bs.privateMessages.map(m => ({
+      id: m.id, fromNik: m.from_nik, toNik: m.to_nik, toName: m.to_name, subject: m.subject, text: m.text,
+      xpBonus: num_(m.xp_bonus), date: m.date, reminderDate: m.reminder_date || '', readAt: m.read_at || null
+    }));
+    localStorage.setItem('private_messages_all', JSON.stringify(mapped));
+  }
+
+  // Catatan perbaikan Leader — 'status' (mis. Forwarded) tidak ada di Sheet, default 'Forwarded'.
+  if (Array.isArray(bs.leaderNotes)) {
+    const mapped = bs.leaderNotes.map(n => ({
+      id: n.id, leaderNik: n.leader_nik, leaderName: n.leader_name, employeeNik: n.nik, employeeName: n.employee_name,
+      category: n.category, note: n.note, date: n.date, status: 'Forwarded', hrReadAt: n.hr_read_at || null, hrReadBy: n.hr_read_by || ''
+    }));
+    localStorage.setItem('leader_notes_all', JSON.stringify(mapped));
+  }
+
+  // Laporan bulanan Leader
+  if (Array.isArray(bs.monthlyReports)) {
+    const mapped = bs.monthlyReports.map(r => ({
+      id: r.id, leaderNik: r.leader_nik, leaderName: r.leader_name, month: r.month,
+      teamCount: num_(r.member_count), avgKpi: num_(r.avg_kpi), summary: r.summary,
+      date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || ''
+    }));
+    localStorage.setItem('monthly_reports_all', JSON.stringify(mapped));
+  }
+
+  // Pengingat Agenda HR selesai
+  if (Array.isArray(bs.hrAgendaDone)) {
+    const mapped = {};
+    bs.hrAgendaDone.forEach(x => { mapped[x.key] = { doneAt: x.done_at, doneBy: x.done_by }; });
+    localStorage.setItem('hr_agenda_done_all', JSON.stringify(mapped));
+  }
+}
+
+function num_(v) { const n = Number(v); return isNaN(n) ? 0 : n; }
+function truthy_(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'TRUE'; }
+
+// Ambil data terbaru dari server (Google Sheets) untuk user yang sedang login, lalu perbarui cache lokal.
+// Dipanggil saat login dan saat app dibuka (initData) supaya data konsisten lintas perangkat.
+async function syncFromServer() {
+  if (!GAS_URL || !state.activeProfile) return false;
+  const res = await gasCall('bootstrap', { nik: state.activeProfile.nik });
+  if (!res.ok) { console.warn('syncFromServer gagal:', res.error); return false; }
+  mapBootstrapToCaches(res.bootstrap);
+  state.activeProfile = { ...state.activeProfile, ...res.user };
+  localStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
+  return true;
 }
 
 const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
@@ -597,6 +752,17 @@ function initData() {
     state.activeProfile = found;
     loadUserData();
     showMainScreen();
+
+    // Refresh data terbaru dari server di latar belakang (tidak memblokir tampilan awal),
+    // lalu render ulang tab yang sedang aktif supaya data lintas-perangkat langsung terlihat.
+    if (GAS_URL) {
+      syncFromServer().then(success => {
+        if (success) {
+          loadUserData();
+          switchTab(state.currentTab || 'home', false);
+        }
+      });
+    }
   } else {
     showAuthScreen();
   }
@@ -652,17 +818,9 @@ async function loginUser() {
   if (GAS_URL) {
     const res = await gasCall('login', { kodeUnik: kode, passCode: pass });
     if (res.ok) {
-      // Sinkronkan daftar akun dari server ke cache lokal supaya fitur lain (mis. daftar tim, HR) tetap jalan.
-      initUsers();
-      if (res.bootstrap && Array.isArray(res.bootstrap.users)) {
-        res.bootstrap.users.forEach(su => {
-          const idx = state.allUsers.findIndex(x => x.nik === su.nik);
-          if (idx >= 0) state.allUsers[idx] = { ...state.allUsers[idx], ...su };
-          else state.allUsers.push(su);
-        });
-        localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
-      }
+      // Sinkronkan SELURUH data (akun, presensi, ide, cuti, dst.) dari server ke cache lokal.
       state.activeProfile = res.user;
+      if (res.bootstrap) mapBootstrapToCaches(res.bootstrap);
       localStorage.setItem('active_user_session', JSON.stringify(res.user));
       loadUserData();
       showMainScreen();
@@ -1295,9 +1453,10 @@ function submitCreateAgendaByHR() {
     return;
   }
 
-  const newAgenda = { id: Date.now(), title, date, time, location, xpBonus };
+  const newAgenda = { id: Date.now(), title, date, time, location, xpBonus, scope: 'company' };
   state.agendas.unshift(newAgenda);
   localStorage.setItem('agendas_all', JSON.stringify(state.agendas));
+  if (GAS_URL) gasCall('addAgenda', { ...newAgenda, createdBy: state.activeProfile.nik });
 
   showToast('🎉 Agenda Perusahaan berhasil dibuat!');
   renderAgendaTab();
@@ -1314,7 +1473,7 @@ function updateActXpButton() {
   else btn.textContent = '✨ Catat Kegiatan (+30 XP)';
 }
 
-function submitActivity() {
+async function submitActivity() {
   const typeSelect = document.getElementById('actType');
   const type = typeSelect.value;
   const typeLabel = typeSelect.options[typeSelect.selectedIndex].text;
@@ -1332,11 +1491,14 @@ function submitActivity() {
     date: now.toISOString().slice(0, 10),
     time: now.toTimeString().slice(0, 5),
     type: typeLabel,
-    note
+    note,
+    xpEarned: xp
   };
 
   state.activities.unshift(act);
   localStorage.setItem('activities_' + state.activeProfile.nik, JSON.stringify(state.activities));
+
+  if (GAS_URL) gasCall('addActivity', { ...act, nik: state.activeProfile.nik });
 
   fireConfetti();
   showToast(`🎉 Kegiatan dicatat! +${xp} XP ditambahkan.`);
@@ -1441,6 +1603,7 @@ function resolveAgenda(agendaId, statusChoice) {
   };
 
   localStorage.setItem('agenda_user_status_all', JSON.stringify(state.agendaUserStatus));
+  if (GAS_URL) gasCall('setAgendaStatus', { key, agendaId, nik: myNik, status: statusChoice, date: state.agendaUserStatus[key].date });
 
   if (xpAward > 0) {
     state.activeProfile.xp = (state.activeProfile.xp || 0) + xpAward;
@@ -1468,6 +1631,7 @@ function submitBroadcast() {
   const ann = { id: Date.now(), date: now.toISOString().slice(0, 10), text, expiresAt };
   state.announcements.unshift(ann);
   localStorage.setItem('announcements_all', JSON.stringify(state.announcements));
+  if (GAS_URL) gasCall('addAnnouncement', { ...ann, createdBy: state.activeProfile.nik });
 
   showToast('🚀 Broadcast pengumuman berhasil dipublikasikan!');
   renderBroadcastBanner();
@@ -1551,7 +1715,7 @@ function renderHalBaikTab() {
   `).join('');
 }
 
-function submitHalBaik() {
+async function submitHalBaik() {
   const title = document.getElementById('halBaikTitle').value.trim();
   const essay = document.getElementById('halBaikEssay').value.trim();
   if (!title || !essay) { showToast('⚠️ Judul dan penjelasan kontribusi wajib diisi.'); return; }
@@ -1564,6 +1728,7 @@ function submitHalBaik() {
   };
   state.halBaik.unshift(item);
   localStorage.setItem('halbaik_all', JSON.stringify(state.halBaik));
+  if (GAS_URL) gasCall('addGoodDeed', item);
   showToast('🌱 Kontribusi dikirim. Menunggu konfirmasi Leader.');
   renderHalBaikTab();
 }
@@ -1691,6 +1856,7 @@ function addLibur() {
 
   state.leaves.unshift(newLeave);
   localStorage.setItem('leaves_all', JSON.stringify(state.leaves));
+  if (GAS_URL) gasCall('addLeave', { id: newLeave.id, nik: newLeave.nik, startDate: start, endDate: end, reason: newLeave.ket });
   showToast('✅ Pengajuan libur dikirim. Status: Diajukan.');
   renderLiburTab();
 }
@@ -1837,6 +2003,7 @@ function approveLeave(id, isApprove) {
     item.status = isApprove ? 'Approved' : 'Rejected';
     item.reviewedAt = Date.now();
     localStorage.setItem('leaves_all', JSON.stringify(state.leaves));
+    if (GAS_URL) gasCall('reviewLeave', { id: item.id, status: item.status, reviewerNik: state.activeProfile.nik });
     showToast(isApprove ? '✅ Jadwal libur disetujui!' : '❌ Jadwal libur ditolak.');
     renderLeaderDashboard();
   }
@@ -1878,6 +2045,7 @@ function approveHalBaik(id, isApprove) {
     item.xpAwarded = true;
   }
   localStorage.setItem('halbaik_all', JSON.stringify(state.halBaik));
+  if (GAS_URL) gasCall('reviewGoodDeed', { id: item.id, status: item.status, note: item.leaderNote, reviewerNik: state.activeProfile.nik });
   showToast(isApprove ? '✅ Kontribusi dikonfirmasi. +20 XP diberikan ke anggota.' : 'Kontribusi tidak disetujui.');
   renderLeaderDashboard();
 }
@@ -2438,7 +2606,10 @@ function renderHomeTab(){
 
 function renderInboxPage(){
   const c=document.getElementById('content'), msgs=getAllHRMessages(state.activeProfile.nik);
-  msgs.forEach(m=>{if(!m.readAt)m.readAt=Date.now()});localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));renderBroadcastBanner();
+  const newlyRead=msgs.filter(m=>!m.readAt);
+  newlyRead.forEach(m=>{m.readAt=Date.now();if(GAS_URL) gasCall('markMessageRead', { id: m.id });});
+  if(newlyRead.length) localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));
+  renderBroadcastBanner();
   c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Penting dari HR</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${msgs.length?msgs.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'}</div><div class="message-meta">${m.date} • Dari HR Corporate</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi dari HR.</div>'}`;
 }
 
@@ -2494,6 +2665,7 @@ function capturePhotoAndAbsen(){
   saveProfileChanges();
   const newRecord={id:Date.now(),date:now.toISOString().slice(0,10),time:timeStr,shift:isHr?'pagi':state.selectedShift,type:state.selectedType,statusText,lat:state.coords.lat,lng:state.coords.lng,xpEarned,role:state.activeProfile.role,photo:capturedPhoto||null};
   state.records.unshift(newRecord);localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));
+  if(GAS_URL) gasCall('addAttendance', { id:newRecord.id, nik:state.activeProfile.nik, date:newRecord.date, time:newRecord.time, shift:newRecord.shift, type:newRecord.type, statusText:newRecord.statusText, lat:newRecord.lat, lng:newRecord.lng, distanceM: state.distanceToOffice, xpEarned:newRecord.xpEarned, source:'web' });
   stopCamera();fireConfetti();showToast(capturedPhoto?`🎉 Presensi berhasil! Foto tersimpan. +${xpEarned} XP diperoleh.`:`🎉 Presensi berhasil! +${xpEarned} XP diperoleh. (Foto tidak tersimpan — kamera tidak aktif)`);
   const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px">${capturedPhoto?`<img src="${capturedPhoto}" alt="Foto presensi" style="width:96px;height:96px;object-fit:cover;border-radius:12px;margin:0 auto 8px;display:block">`:`<div style="font-size:30px">✅</div>`}<div style="font-size:15px;font-weight:800;color:var(--status-positive);margin-top:5px">Presensi ${state.selectedType.toUpperCase()} Berhasil Dicatat</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Shift ${shift.label} • Status: <strong>${statusText}</strong> • +${xpEarned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
 }
@@ -2535,7 +2707,10 @@ function renderAgendaSubTabContent(){
 
 function submitTeamAgenda(){
   const title=document.getElementById('teamAgendaTitle').value.trim(),date=document.getElementById('teamAgendaDate').value,time=document.getElementById('teamAgendaTime').value.trim()||'09:00 WIB',location=document.getElementById('teamAgendaLoc').value.trim()||'Kantor';if(!title||!date){showToast('⚠️ Judul dan tanggal wajib diisi.');return;}
-  state.agendas.unshift({id:Date.now(),title,date,time,location,xpBonus:0,hrXpBonus:0,scope:'team',teamLeaderNik:state.activeProfile.nik,creatorNik:state.activeProfile.nik});localStorage.setItem('agendas_all',JSON.stringify(state.agendas));showToast('👥 Agenda tim dikirim. Reward XP ditentukan oleh HR.');renderAgendaTab();
+  const newAgenda={id:Date.now(),title,date,time,location,xpBonus:0,hrXpBonus:0,scope:'team',teamLeaderNik:state.activeProfile.nik,creatorNik:state.activeProfile.nik};
+  state.agendas.unshift(newAgenda);localStorage.setItem('agendas_all',JSON.stringify(state.agendas));
+  if(GAS_URL) gasCall('addAgenda', { id:newAgenda.id, title, date, time, location, scope:'team', teamLeaderNik: state.activeProfile.nik, xpBonus:0, createdBy: state.activeProfile.nik });
+  showToast('👥 Agenda tim dikirim. Reward XP ditentukan oleh HR.');renderAgendaTab();
 }
 
 function renderAgendaList(){
@@ -2559,12 +2734,12 @@ function renderLeaderPerformancePage(){
 function renderLeaderNotesPage(){
   v4EnsureStores();initUsers();const c=document.getElementById('content'),team=state.allUsers.filter(u=>u.leaderNik===state.activeProfile.nik),mine=state.leaderNotes.filter(n=>n.leaderNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📝 Catatan Perbaikan Anggota</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="card"><label>Anggota Tim</label><select id="noteMember">${team.map(u=>`<option value="${u.nik}">${u.nama}</option>`).join('')}</select><label>Kategori</label><select id="noteCategory"><option>Kedisiplinan</option><option>Kinerja</option><option>Komunikasi</option><option>SOP / Proses</option><option>Pengembangan</option></select><label>Catatan Perbaikan / Coaching</label><textarea id="leaderImproveNote" rows="4" placeholder="Tuliskan fakta, arahan perbaikan, dan target tindak lanjut..."></textarea><button class="btn" onclick="submitLeaderNote()">📨 Simpan & Teruskan ke HR</button></div><h2 class="section-title">Riwayat Catatan</h2>${mine.length?mine.map(n=>`<div class="report-card"><div style="display:flex;justify-content:space-between"><strong style="font-size:11.5px">${n.employeeName}</strong><span class="report-status">Terkirim ke HR</span></div><div style="font-size:9.5px;color:#64748b;margin:4px 0">${n.category} • ${n.date}</div><div style="font-size:10.5px;line-height:1.45">${n.note}</div></div>`).join(''):'<div class="empty">Belum ada catatan perbaikan.</div>'}`;
 }
-function submitLeaderNote(){const nik=document.getElementById('noteMember').value,note=document.getElementById('leaderImproveNote').value.trim(),category=document.getElementById('noteCategory').value;if(!note){showToast('⚠️ Isi catatan perbaikan terlebih dahulu.');return;}initUsers();const u=state.allUsers.find(x=>x.nik===nik);state.leaderNotes.unshift({id:Date.now(),leaderNik:state.activeProfile.nik,leaderName:state.activeProfile.nama,employeeNik:nik,employeeName:u?.nama||nik,category,note,date:new Date().toISOString().slice(0,10),status:'Forwarded'});localStorage.setItem('leader_notes_all',JSON.stringify(state.leaderNotes));showToast('📨 Catatan perbaikan diteruskan ke HR.');renderLeaderNotesPage();}
+function submitLeaderNote(){const nik=document.getElementById('noteMember').value,note=document.getElementById('leaderImproveNote').value.trim(),category=document.getElementById('noteCategory').value;if(!note){showToast('⚠️ Isi catatan perbaikan terlebih dahulu.');return;}initUsers();const u=state.allUsers.find(x=>x.nik===nik);const item={id:Date.now(),leaderNik:state.activeProfile.nik,leaderName:state.activeProfile.nama,employeeNik:nik,employeeName:u?.nama||nik,category,note,date:new Date().toISOString().slice(0,10),status:'Forwarded'};state.leaderNotes.unshift(item);localStorage.setItem('leader_notes_all',JSON.stringify(state.leaderNotes));if(GAS_URL) gasCall('addLeaderNote', { id:item.id, leaderNik:item.leaderNik, nik, category, note, date:item.date });showToast('📨 Catatan perbaikan diteruskan ke HR.');renderLeaderNotesPage();}
 
 function renderMonthlyReportPage(){
   v4EnsureStores();initUsers();const c=document.getElementById('content'),month=new Date().toISOString().slice(0,7),team=state.allUsers.filter(u=>u.leaderNik===state.activeProfile.nik),mine=state.monthlyReports.filter(r=>r.leaderNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);const avg=team.length?Math.round(team.reduce((s,u)=>s+v4KpiScore(u.nik),0)/team.length):0;c.innerHTML=`<div class="v4-section-head"><strong>📑 Laporan Bulanan ke HR</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="card"><label>Bulan Laporan</label><input type="month" id="reportMonth" value="${month}"><div class="home-summary" style="margin:4px 0 10px"><div class="mini-stat"><div class="value">${team.length}</div><div class="label">Anggota</div></div><div class="mini-stat"><div class="value">${avg}</div><div class="label">Rata2 KPI</div></div><div class="mini-stat"><div class="value">${team.reduce((s,u)=>s+(u.xp||0),0)}</div><div class="label">Total XP</div></div></div><label>Ringkasan Perkembangan & Tindak Lanjut</label><textarea id="monthlySummary" rows="5" placeholder="Perkembangan tim, kendala, anggota yang perlu perhatian, dan rencana bulan berikutnya..."></textarea><button class="btn" onclick="submitMonthlyReport()">📨 Kirim Laporan Bulanan ke HR</button></div><h2 class="section-title">Riwayat Laporan</h2>${mine.length?mine.map(r=>`<div class="report-card"><div style="display:flex;justify-content:space-between"><strong>${r.month}</strong><span class="report-status">Terkirim</span></div><div style="font-size:10px;color:#64748b;margin:5px 0">Rata-rata KPI: ${r.avgKpi} • ${r.teamCount} anggota</div><div style="font-size:10.5px">${r.summary}</div></div>`).join(''):'<div class="empty">Belum ada laporan bulanan.</div>'}`;
 }
-function submitMonthlyReport(){const month=document.getElementById('reportMonth').value,summary=document.getElementById('monthlySummary').value.trim();if(!month||!summary){showToast('⚠️ Bulan dan ringkasan laporan wajib diisi.');return;}initUsers();const team=state.allUsers.filter(u=>u.leaderNik===state.activeProfile.nik),avg=team.length?Math.round(team.reduce((s,u)=>s+v4KpiScore(u.nik),0)/team.length):0;const old=state.monthlyReports.findIndex(r=>r.leaderNik===state.activeProfile.nik&&r.month===month);const rec={id:Date.now(),leaderNik:state.activeProfile.nik,leaderName:state.activeProfile.nama,month,summary,teamCount:team.length,avgKpi:avg,date:new Date().toISOString().slice(0,10)};if(old>=0)state.monthlyReports[old]=rec;else state.monthlyReports.unshift(rec);localStorage.setItem('monthly_reports_all',JSON.stringify(state.monthlyReports));showToast('✅ Laporan bulanan dikirim ke HR.');renderMonthlyReportPage();}
+function submitMonthlyReport(){const month=document.getElementById('reportMonth').value,summary=document.getElementById('monthlySummary').value.trim();if(!month||!summary){showToast('⚠️ Bulan dan ringkasan laporan wajib diisi.');return;}initUsers();const team=state.allUsers.filter(u=>u.leaderNik===state.activeProfile.nik),avg=team.length?Math.round(team.reduce((s,u)=>s+v4KpiScore(u.nik),0)/team.length):0;const old=state.monthlyReports.findIndex(r=>r.leaderNik===state.activeProfile.nik&&r.month===month);const rec={id:Date.now(),leaderNik:state.activeProfile.nik,leaderName:state.activeProfile.nama,month,summary,teamCount:team.length,avgKpi:avg,date:new Date().toISOString().slice(0,10)};if(old>=0)state.monthlyReports[old]=rec;else state.monthlyReports.unshift(rec);localStorage.setItem('monthly_reports_all',JSON.stringify(state.monthlyReports));if(GAS_URL) gasCall('addMonthlyReport', { id:rec.id, leaderNik:rec.leaderNik, month, memberCount:rec.teamCount, avgKpi:rec.avgKpi, summary });showToast('✅ Laporan bulanan dikirim ke HR.');renderMonthlyReportPage();}
 
 function renderHRDashboard(){
   v4EnsureStores();initUsers();const c=document.getElementById('content'),users=state.allUsers.filter(u=>u.role!=='hr'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,notes=state.leaderNotes.length,reports=state.monthlyReports.length,score=v4KpiScore(state.activeProfile.nik),unreadSent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).length;
@@ -2579,7 +2754,7 @@ function renderKinerjaTab(){
 function renderHRMessagesPage(){
   v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'),sent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi HR</strong></div><div class="card"><label>Penerima</label><select id="msgToNik">${recipients.map(u=>`<option value="${u.nik}">${u.nama} — ${u.role}</option>`).join('')}</select><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Tindak lanjut evaluasi"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Pesan pribadi akan tampil sebagai notifikasi penting pada akun penerima."></textarea><label>Bonus XP untuk Penerima</label><select id="msgXpBonus">${v5XpOptions(20)}</select><div style="font-size:10px;color:#64748b;margin:-3px 0 9px">XP diberikan langsung saat pesan penting dikirim.</div><button class="btn" onclick="sendHRPrivateMessage()">🚨 Kirim Pesan Penting + XP</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'} → ${m.toName}</div><div class="message-meta">${m.date} • ${m.readAt?'Sudah dibaca':'Belum dibaca'}${m.xpBonus?` • ⭐ +${m.xpBonus} XP`:''}</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi yang dikirim.</div>'}`;
 }
-function sendHRPrivateMessage(){const toNik=document.getElementById('msgToNik').value,subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=parseInt(document.getElementById('msgXpBonus').value)||10;if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}const u=state.allUsers.find(x=>x.nik===toNik);state.privateMessages.unshift({id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:new Date().toISOString().slice(0,10),readAt:null});localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim ke ${u?.nama||toNik} • +${xpBonus} XP`);renderHRMessagesPage();}
+function sendHRPrivateMessage(){const toNik=document.getElementById('msgToNik').value,subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=parseInt(document.getElementById('msgXpBonus').value)||10;if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}const u=state.allUsers.find(x=>x.nik===toNik);const msg={id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:new Date().toISOString().slice(0,10),readAt:null};state.privateMessages.unshift(msg);localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));if(GAS_URL) gasCall('sendPrivateMessage', msg);v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim ke ${u?.nama||toNik} • +${xpBonus} XP`);renderHRMessagesPage();}
 
 function renderHRLeaderNotesPage(){v4EnsureStores();const c=document.getElementById('content'),notes=[...state.leaderNotes].sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📝 Catatan Perbaikan dari Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${notes.length?notes.map(n=>`<div class="report-card"><div style="display:flex;justify-content:space-between"><strong>${n.employeeName}</strong><span class="report-status">${n.category}</span></div><div style="font-size:9.5px;color:#64748b;margin:4px 0">Leader: ${n.leaderName} • ${n.date}</div><div style="font-size:10.5px;line-height:1.45">${n.note}</div></div>`).join(''):'<div class="empty">Belum ada catatan perbaikan dari Leader.</div>'}`;}
 function renderHRMonthlyReportsPage(){v4EnsureStores();const c=document.getElementById('content'),rs=[...state.monthlyReports].sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📑 Laporan Bulanan Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${rs.length?rs.map(r=>`<div class="report-card"><div style="display:flex;justify-content:space-between"><strong>${r.leaderName} • ${r.month}</strong><span class="report-status">KPI ${r.avgKpi}</span></div><div style="font-size:9.5px;color:#64748b;margin:5px 0">${r.teamCount} anggota • Dikirim ${r.date}</div><div style="font-size:10.5px;line-height:1.45">${r.summary}</div></div>`).join(''):'<div class="empty">Belum ada laporan bulanan Leader.</div>'}`;}
@@ -2731,20 +2906,28 @@ function v6KpiBreakdownHtml(nik){
 function submitIde(){
   const title=document.getElementById('ideTitle').value.trim(),desc=document.getElementById('ideDesc').value.trim();if(!title||!desc){showToast('⚠️ Judul dan penjelasan ide wajib diisi.');return;}
   const now=new Date(),item={id:Date.now(),date:v6LocalIso(now),time:now.toTimeString().slice(0,5),timestamp:Date.now(),title,desc,status:'Pending',leaderNote:'-',hrNote:'-',slaStatus:'Menunggu Leader',ideaSubmitXpAwarded:true,leaderStageXpAwarded:false,hrAcceptedXpAwarded:false,implementedXpAwarded:false,nik:state.activeProfile.nik,nama:state.activeProfile.nama,role:state.activeProfile.role,brand:state.activeProfile.brand,leaderNik:state.activeProfile.leaderNik||''};
-  state.ideas.unshift(item);localStorage.setItem('ideas_all',JSON.stringify(state.ideas));addXpToUser(state.activeProfile.nik,V6_POLICY.ideaRewards.submit);fireConfetti();showToast(`💡 Ide dikirim. +${V6_POLICY.ideaRewards.submit} XP • Menunggu Leader.`);renderIdeTab();
+  state.ideas.unshift(item);localStorage.setItem('ideas_all',JSON.stringify(state.ideas));
+  if(GAS_URL) gasCall('addIdea', item);
+  addXpToUser(state.activeProfile.nik,V6_POLICY.ideaRewards.submit);fireConfetti();showToast(`💡 Ide dikirim. +${V6_POLICY.ideaRewards.submit} XP • Menunggu Leader.`);renderIdeTab();
 }
 function approveLeaderIdea(id,isApprove){
   const item=state.ideas.find(i=>i.id===id),noteEl=document.getElementById('ideNote_'+id);if(!item)return;item.status=isApprove?'Forwarded':'Rejected';item.leaderNote=noteEl?(noteEl.value.trim()||'-'):'-';item.reviewedAt=Date.now();item.leaderReviewedAt=item.reviewedAt;item.slaStatus=isApprove?'Menunggu HR':'Selesai di Leader';
   if(isApprove){item.forwardedAt=Date.now();if(!item.leaderStageXpAwarded&&!item.leaderXpAwarded){addXpToUser(item.nik,V6_POLICY.ideaRewards.leader);item.leaderStageXpAwarded=true;}}
-  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(isApprove?`💡 Ide diteruskan ke HR. +${V6_POLICY.ideaRewards.leader} XP tahap Leader.`:'Ide tidak disetujui Leader.');renderLeaderDashboard();
+  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));
+  if(GAS_URL) gasCall('reviewIdeaLeader', { id: item.id, status: item.status, note: item.leaderNote, reviewerNik: state.activeProfile.nik });
+  showToast(isApprove?`💡 Ide diteruskan ke HR. +${V6_POLICY.ideaRewards.leader} XP tahap Leader.`:'Ide tidak disetujui Leader.');renderLeaderDashboard();
 }
 function decideIdeaByHR(id,status){
   const item=state.ideas.find(i=>i.id===id);if(!item)return;const note=document.getElementById('hrNote_'+id)?.value.trim()||'-';item.status=status;item.hrNote=note;item.hrReviewedAt=Date.now();item.slaStatus=status==='HRReview'?'Dalam Kajian HR':'Selesai di HR';
   if(status==='HRAccepted'&&!item.hrAcceptedXpAwarded){addXpToUser(item.nik,V6_POLICY.ideaRewards.hrAccepted);item.hrAcceptedXpAwarded=true;}
-  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(status==='HRAccepted'?`✅ Ide diterima HR. +${V6_POLICY.ideaRewards.hrAccepted} XP.`:status==='HRRejected'?'❌ Ide ditolak HR.':'📝 Ide ditandai untuk kajian lanjutan.');renderIdeHalBaikHRTab();
+  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));
+  if(GAS_URL) gasCall('reviewIdeaHR', { id: item.id, status, note, reviewerNik: state.activeProfile.nik });
+  showToast(status==='HRAccepted'?`✅ Ide diterima HR. +${V6_POLICY.ideaRewards.hrAccepted} XP.`:status==='HRRejected'?'❌ Ide ditolak HR.':'📝 Ide ditandai untuk kajian lanjutan.');renderIdeHalBaikHRTab();
 }
 function markIdeaImplemented(id){
-  const item=state.ideas.find(i=>i.id===id);if(!item)return;item.status='Implemented';item.implementedAt=Date.now();if(!item.implementedXpAwarded){addXpToUser(item.nik,V6_POLICY.ideaRewards.implemented);item.implementedXpAwarded=true;}localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(`🚀 Ide diimplementasikan. +${V6_POLICY.ideaRewards.implemented} XP dampak.`);renderIdeHalBaikHRTab();
+  const item=state.ideas.find(i=>i.id===id);if(!item)return;item.status='Implemented';item.implementedAt=Date.now();if(!item.implementedXpAwarded){addXpToUser(item.nik,V6_POLICY.ideaRewards.implemented);item.implementedXpAwarded=true;}localStorage.setItem('ideas_all',JSON.stringify(state.ideas));
+  if(GAS_URL) gasCall('implementIdea', { id, reviewerNik: state.activeProfile.nik });
+  showToast(`🚀 Ide diimplementasikan. +${V6_POLICY.ideaRewards.implemented} XP dampak.`);renderIdeHalBaikHRTab();
 }
 
 function renderIdeTab(){
@@ -2884,8 +3067,9 @@ renderAgendaTab=function(){
 function sendHRPrivateMessageV7(){
   const toNik=document.getElementById('msgToNik').value,subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=parseInt(document.getElementById('msgXpBonus').value)||10;
   if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}
-  const u=state.allUsers.find(x=>x.nik===toNik);state.privateMessages.unshift({id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:v6LocalIso(),readAt:null});
-  localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim ke ${u?.nama||toNik}${xpBonus?` • +${xpBonus} XP`:''}`);state.agendaSubTab='messages';renderAgendaTab();
+  const u=state.allUsers.find(x=>x.nik===toNik);const msg={id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:v6LocalIso(),readAt:null};
+  state.privateMessages.unshift(msg);
+  localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));if(GAS_URL) gasCall('sendPrivateMessage', msg);v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim ke ${u?.nama||toNik}${xpBonus?` • +${xpBonus} XP`:''}`);state.agendaSubTab='messages';renderAgendaTab();
 }
 
 renderBottomNav=function(){
@@ -2961,6 +3145,7 @@ function renderHRLeaderNoteDetail(id){
     state.leaderNotes[idx].hrReadAt=new Date().toISOString();
     state.leaderNotes[idx].hrReadBy=state.activeProfile?.nik||'HR';
     localStorage.setItem('leader_notes_all',JSON.stringify(state.leaderNotes));
+    if(GAS_URL) gasCall('markLeaderNoteRead', { id, hrNik: state.activeProfile?.nik||'' });
   }
   const n=state.leaderNotes[idx], c=document.getElementById('content');
   const readTime=n.hrReadAt ? new Date(n.hrReadAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'}) : '-';
@@ -3040,8 +3225,8 @@ function v9GetHrAgendaItems(){
   return [...company,...messages].map(x=>({...x,done:!!state.hrAgendaDone[x.key]})).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 }
 function v9ActiveHrAgendaItems(){ return v9GetHrAgendaItems().filter(x=>!x.done); }
-function v9MarkHrAgendaDone(key){ v9EnsureHrReminderStore(); state.hrAgendaDone[key]={doneAt:new Date().toISOString(),doneBy:state.activeProfile.nik};v9SaveHrReminderStore();showToast('✅ Pengingat Agenda HR ditandai selesai.');state.agendaSubTab='hragenda';renderAgendaTab(); }
-function v9ReopenHrAgenda(key){ v9EnsureHrReminderStore(); delete state.hrAgendaDone[key];v9SaveHrReminderStore();showToast('↩️ Pengingat diaktifkan kembali.');state.agendaSubTab='hragenda';renderAgendaTab(); }
+function v9MarkHrAgendaDone(key){ v9EnsureHrReminderStore(); state.hrAgendaDone[key]={doneAt:new Date().toISOString(),doneBy:state.activeProfile.nik};v9SaveHrReminderStore();if(GAS_URL) gasCall('setHrReminderDone', { key, nik: state.activeProfile.nik });showToast('✅ Pengingat Agenda HR ditandai selesai.');state.agendaSubTab='hragenda';renderAgendaTab(); }
+function v9ReopenHrAgenda(key){ v9EnsureHrReminderStore(); delete state.hrAgendaDone[key];v9SaveHrReminderStore();if(GAS_URL) gasCall('reopenHrReminder', { key });showToast('↩️ Pengingat diaktifkan kembali.');state.agendaSubTab='hragenda';renderAgendaTab(); }
 function v9HrAgendaBadgeCount(){ return v9ActiveHrAgendaItems().filter(x=>x.date).length; }
 function v9RenderHrAgenda(){
   v9EnsureHrReminderStore(); const container=document.getElementById('agendaSubTabContent'); if(!container)return;
@@ -3057,7 +3242,7 @@ renderHRMonthlyReportsPage=function(){
 };
 function v9RenderHRMonthlyReportDetail(id){
   v4EnsureStores(); const idx=state.monthlyReports.findIndex(r=>String(r.id)===String(id));if(idx<0){showToast('⚠️ Laporan tidak ditemukan.');switchTab('home',true);return;}
-  if(!state.monthlyReports[idx].hrReadAt){state.monthlyReports[idx].hrReadAt=new Date().toISOString();state.monthlyReports[idx].hrReadBy=state.activeProfile.nik;localStorage.setItem('monthly_reports_all',JSON.stringify(state.monthlyReports));}
+  if(!state.monthlyReports[idx].hrReadAt){state.monthlyReports[idx].hrReadAt=new Date().toISOString();state.monthlyReports[idx].hrReadBy=state.activeProfile.nik;localStorage.setItem('monthly_reports_all',JSON.stringify(state.monthlyReports));if(GAS_URL) gasCall('markMonthlyReportRead', { id, hrNik: state.activeProfile.nik });}
   const r=state.monthlyReports[idx],c=document.getElementById('content'),readTime=new Date(r.hrReadAt).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
   c.innerHTML=`<div class="v4-section-head"><strong>📑 Detail Laporan Bulanan</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="card" style="border-left:4px solid #6366f1"><div style="display:flex;justify-content:space-between;gap:10px"><div><div style="font-size:17px;font-weight:900">${v9Esc(r.leaderName)}</div><div style="font-size:10px;color:#64748b">Laporan periode ${v9Esc(r.month)}</div></div><span class="report-status">KPI ${v9Esc(r.avgKpi)}</span></div><div class="metric-row" style="margin-top:14px"><div class="metric-box"><strong>${v9Esc(r.teamCount)}</strong><span>Anggota Tim</span></div><div class="metric-box"><strong>${v9Esc(r.avgKpi)}</strong><span>Rata-rata KPI</span></div><div class="metric-box"><strong>${v9Esc(r.date)}</strong><span>Tanggal Kirim</span></div></div><div style="margin-top:15px;font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase">Ringkasan Perkembangan & Tindak Lanjut</div><div style="margin-top:7px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;line-height:1.65;white-space:pre-wrap">${v9Esc(r.summary)}</div><div style="margin-top:13px;padding:10px 12px;border-radius:10px;background:#ecfdf5;color:#047857;font-size:10.5px;font-weight:700">✅ Sudah ditinjau HR • ${v9Esc(readTime)}</div></div><button class="btn secondary" onclick="switchTab('home',true)">Kembali ke Beranda</button>`;renderBottomNav();
 }
@@ -3075,7 +3260,7 @@ renderAgendaSubTabContent=function(){
 };
 function sendHRPrivateMessageV9(){
   const toNik=document.getElementById('msgToNik').value,subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),reminderDate=document.getElementById('msgReminderDate').value,xpBonus=parseInt(document.getElementById('msgXpBonus').value)||10;if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}
-  const u=state.allUsers.find(x=>x.nik===toNik);state.privateMessages.unshift({id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:v6LocalIso(),reminderDate:reminderDate||'',readAt:null});localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim${reminderDate?' • masuk Agenda HR':''}.`);state.agendaSubTab='messages';renderAgendaTab();
+  const u=state.allUsers.find(x=>x.nik===toNik);const msg={id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:v6LocalIso(),reminderDate:reminderDate||'',readAt:null};state.privateMessages.unshift(msg);localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));if(GAS_URL) gasCall('sendPrivateMessage', msg);v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim${reminderDate?' • masuk Agenda HR':''}.`);state.agendaSubTab='messages';renderAgendaTab();
 }
 
 renderAgendaTab=function(){
