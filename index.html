@@ -333,7 +333,9 @@
   .collapse-card[open] summary:after { content:'−'; }
   .collapse-body { padding:0 13px 13px; }
   .profile-compact { display:flex; align-items:center; gap:11px; padding:12px; border:1px solid var(--border); border-radius:12px; background:#fff; margin-bottom:10px; }
-  .profile-avatar { width:48px; height:48px; border-radius:50%; background:var(--brand-bg-light); color:var(--brand-primary); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; flex:none; }
+  .profile-avatar { width:48px; height:48px; border-radius:50%; background:var(--brand-bg-light); color:var(--brand-primary); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; flex:none; position:relative; overflow:hidden; cursor:pointer; }
+  .profile-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  .profile-avatar .avatar-edit-badge { position:absolute; bottom:0; left:0; right:0; background:rgba(15,23,42,.6); color:#fff; font-size:7px; text-align:center; padding:2px 0; font-weight:600; }
   .profile-name { font-size:14px; font-weight:800; }
   .profile-meta { font-size:10.5px; color:var(--text-dim); margin-top:2px; }
   .navbtn { font-size:9px; padding:5px 2px; }
@@ -430,7 +432,7 @@
       <input id="loginKode" class="mono" maxlength="3" placeholder="cth. 123" inputmode="numeric">
       <label>Password (2 Karakter)</label>
       <input id="loginPass" class="mono" maxlength="2" type="password" placeholder="cth. 12">
-      <button class="btn" onclick="loginUser()">Masuk ke Aplikasi</button>
+      <button class="btn" id="btnLogin" onclick="loginUser()">Masuk ke Aplikasi</button>
       <div style="font-size:11px; color:var(--text-dim); text-align:center; margin-top:16px;">
         💡 <em>Akun dibuat resmi oleh HR Admin. Hubungi HR jika belum memiliki Kode Unik.</em>
       </div>
@@ -475,7 +477,24 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz-U6AupOTWqZS7s2yoYsU5oBu8SYF2DrS0trvbjpXQfxjriJxIWH2Nmtuboih40Aq8/exec';
+const GAS_URL = '';
+
+// Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
+// Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
+async function gasCall(action, payload) {
+  if (!GAS_URL) return { ok: false, error: 'GAS_URL belum diisi.' };
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // hindari CORS preflight ke Apps Script
+      body: JSON.stringify({ action, payload })
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('gasCall gagal:', action, err);
+    return { ok: false, error: 'Tidak bisa menghubungi server: ' + (err.message || err) };
+  }
+}
 
 const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
 const MAX_DISTANCE_METERS = 300;
@@ -617,7 +636,7 @@ function switchAuthTab(type) {
   document.getElementById('tabBtnLogin').classList.add('active');
 }
 
-function loginUser() {
+async function loginUser() {
   const kode = document.getElementById('loginKode').value.trim();
   const pass = document.getElementById('loginPass').value.trim();
 
@@ -626,8 +645,45 @@ function loginUser() {
     return;
   }
 
+  const btn = document.getElementById('btnLogin');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+  // 1) Coba login ke server (Google Sheets) dulu kalau GAS_URL sudah diisi.
+  if (GAS_URL) {
+    const res = await gasCall('login', { kodeUnik: kode, passCode: pass });
+    if (res.ok) {
+      // Sinkronkan daftar akun dari server ke cache lokal supaya fitur lain (mis. daftar tim, HR) tetap jalan.
+      initUsers();
+      if (res.bootstrap && Array.isArray(res.bootstrap.users)) {
+        res.bootstrap.users.forEach(su => {
+          const idx = state.allUsers.findIndex(x => x.nik === su.nik);
+          if (idx >= 0) state.allUsers[idx] = { ...state.allUsers[idx], ...su };
+          else state.allUsers.push(su);
+        });
+        localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+      }
+      state.activeProfile = res.user;
+      localStorage.setItem('active_user_session', JSON.stringify(res.user));
+      loadUserData();
+      showMainScreen();
+      showToast('🎉 Selamat datang, ' + res.user.nama + '!');
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      return;
+    }
+    // Kalau server menjawab tegas "salah" (bukan sekadar gagal konek), hentikan di sini.
+    if (res.error && !/menghubungi server/i.test(res.error)) {
+      showToast('❌ ' + res.error);
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      return;
+    }
+    // Kalau gagal konek ke server, lanjut ke pengecekan lokal di bawah (mode offline/fallback).
+  }
+
+  // 2) Fallback: cek akun di localStorage perangkat ini (dipakai kalau GAS_URL kosong atau server tidak terjangkau).
   initUsers();
   const found = state.allUsers.find(u => String(u.kodeUnik) === String(kode) && String(u.passCode) === String(pass));
+
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
 
   if (!found) {
     showToast('❌ Kode Unik atau Password salah!');
@@ -821,8 +877,12 @@ function renderProfilTab() {
 
   c.innerHTML = `
     <div class="profile-compact">
-      <div class="profile-avatar">${initials}</div>
-      <div style="flex:1;min-width:0;"><div class="profile-name">${u.nama}</div><div class="profile-meta">${u.brand} • NIK ${u.nik}</div><div style="margin-top:4px;"><span class="role-badge role-${u.role}">${u.role}</span></div></div>
+      <div class="profile-avatar" onclick="document.getElementById('avatarFileInput').click()" title="Ketuk untuk ganti foto profil">
+        ${u.photo ? `<img src="${u.photo}" alt="Foto profil ${u.nama}">` : initials}
+        <span class="avatar-edit-badge">Ganti</span>
+      </div>
+      <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
+      <div style="flex:1;min-width:0;"><div class="profile-name">${u.nama}</div><div class="profile-meta">${u.brand} • NIK ${u.nik}</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="role-badge role-${u.role}">${u.role}</span>${u.photo ? `<span style="font-size:10px;color:var(--brand-primary);cursor:pointer;font-weight:700;" onclick="removeProfilePhoto()">Hapus Foto</span>` : ''}</div></div>
     </div>
     <details class="collapse-card" open>
       <summary>📊 Ringkasan Skor & Kedisiplinan <span style="font-size:9px;color:var(--brand-primary);">${discPct}%</span></summary>
@@ -850,12 +910,33 @@ function renderProfilTab() {
   `;
 }
 
-function updateUserPassword() {
+async function updateUserPassword() {
   const oldPass = document.getElementById('oldPassInput')?.value.trim() || '';
   const newPass = document.getElementById('newPassInput')?.value.trim() || '';
   if (!oldPass || !newPass) { showToast('⚠️ Password lama dan baru wajib diisi.'); return; }
   if (newPass.length !== 2) { showToast('⚠️ Password baru harus 2 karakter.'); return; }
 
+  const oldEl=document.getElementById('oldPassInput'); const newEl=document.getElementById('newPassInput');
+
+  if (GAS_URL) {
+    // Verifikasi password lama ke server (via login), lalu simpan password baru ke server.
+    const verify = await gasCall('login', { kodeUnik: state.activeProfile.kodeUnik, passCode: oldPass });
+    if (!verify.ok) { showToast('❌ ' + (verify.error || 'Password lama tidak cocok.')); return; }
+    const save = await gasCall('saveUser', { ...verify.user, passCode: newPass, actorNik: state.activeProfile.nik });
+    if (!save.ok) { showToast('❌ Gagal menyimpan password baru ke server: ' + (save.error || 'unknown error')); return; }
+
+    state.activeProfile.passCode = newPass;
+    localStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
+    initUsers();
+    const idx = state.allUsers.findIndex(u => u.nik === state.activeProfile.nik);
+    if (idx >= 0) { state.allUsers[idx] = { ...state.allUsers[idx], passCode: newPass }; localStorage.setItem('registered_users', JSON.stringify(state.allUsers)); }
+
+    showToast('✅ Password berhasil diubah di server — berlaku di semua perangkat.');
+    if(oldEl) oldEl.value=''; if(newEl) newEl.value='';
+    return;
+  }
+
+  // Fallback: mode lokal saja (GAS_URL belum diisi).
   initUsers();
   const idx = state.allUsers.findIndex(u => u.nik === state.activeProfile.nik);
   if (idx < 0) { showToast('❌ Akun tidak ditemukan.'); return; }
@@ -865,9 +946,48 @@ function updateUserPassword() {
   state.activeProfile.passCode = newPass;
   localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
   localStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
-  showToast('✅ Password berhasil diubah.');
-  const oldEl=document.getElementById('oldPassInput'); const newEl=document.getElementById('newPassInput');
+  showToast('✅ Password berhasil diubah. (Catatan: GAS_URL belum diisi, perubahan ini baru berlaku di perangkat ini saja.)');
   if(oldEl) oldEl.value=''; if(newEl) newEl.value='';
+}
+
+function handleAvatarUpload(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('⚠️ File harus berupa gambar.'); event.target.value=''; return; }
+  if (file.size > 8 * 1024 * 1024) { showToast('⚠️ Ukuran gambar maksimal 8MB.'); event.target.value=''; return; }
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext('2d');
+      const minSide = Math.min(img.width, img.height);
+      const sx = (img.width - minSide) / 2, sy = (img.height - minSide) / 2;
+      ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, SIZE, SIZE);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+      state.activeProfile.photo = dataUrl;
+      saveProfileChanges();
+      renderProfilTab();
+      showToast('✅ Foto profil berhasil diperbarui.');
+    };
+    img.onerror = () => showToast('❌ Gagal memuat gambar. Coba file lain.');
+    img.src = ev.target.result;
+  };
+  reader.onerror = () => showToast('❌ Gagal membaca file.');
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+function removeProfilePhoto() {
+  if (!state.activeProfile.photo) return;
+  delete state.activeProfile.photo;
+  saveProfileChanges();
+  renderProfilTab();
+  showToast('🗑️ Foto profil dihapus.');
 }
 
 function renderAbsenTab() {
@@ -1992,7 +2112,7 @@ function toggleLeaderSelectOption() {
   }
 }
 
-function hrAddEmployee() {
+async function hrAddEmployee() {
   const nama = document.getElementById('hrNama').value.trim();
   const brand = document.getElementById('hrBrand').value.trim();
   const nik = document.getElementById('hrNik').value.trim();
@@ -2026,16 +2146,27 @@ function hrAddEmployee() {
     showToast('⚠️ Kode Unik ini sudah digunakan oleh pengguna lain.');
     return;
   }
+  if (state.allUsers.some(u => String(u.nik) === String(nik))) {
+    showToast('⚠️ NIK ini sudah terdaftar.');
+    return;
+  }
 
   const newUser = { nik, nama, brand, kodeUnik, passCode, role, xp: 0, streak: 0, leaderNik };
+  const btn = document.getElementById('btnCreateAccount');
+  if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
+
+  if (GAS_URL) {
+    const res = await gasCall('saveUser', { ...newUser, actorNik: state.activeProfile.nik });
+    if (!res.ok) {
+      showToast('❌ Gagal menyimpan ke server: ' + (res.error || 'unknown error') + ' — akun tetap disimpan lokal di perangkat ini.');
+    }
+  }
+
   state.allUsers.push(newUser);
   localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
 
-  if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run.registerUserScript(newUser);
-  }
-
-  showToast('🎉 Akun ' + role.toUpperCase() + ' untuk ' + nama + ' berhasil dibuat!');
+  if (btn) { btn.disabled = false; btn.textContent = 'Buat Akun Resmi'; }
+  showToast('🎉 Akun ' + role.toUpperCase() + ' untuk ' + nama + ' berhasil dibuat!' + (GAS_URL ? ' Tersimpan ke Google Sheets — bisa login dari perangkat manapun.' : ' (Catatan: GAS_URL belum diisi, akun ini baru tersimpan lokal di perangkat ini saja.)'));
   renderHRDashboard();
 }
 
@@ -2065,11 +2196,16 @@ function renderHRUserList() {
   }).join('');
 }
 
-function hrDeleteUser(nik) {
+async function hrDeleteUser(nik) {
   initUsers();
-  state.allUsers = state.allUsers.filter(u => u.nik !== nik);
+  const u = state.allUsers.find(x => x.nik === nik);
+  if (GAS_URL && u) {
+    const res = await gasCall('saveUser', { ...u, active: false, actorNik: state.activeProfile.nik });
+    if (!res.ok) showToast('⚠️ Gagal menonaktifkan akun di server: ' + (res.error || 'unknown error') + ' — dihapus dari cache lokal saja.');
+  }
+  state.allUsers = state.allUsers.filter(x => x.nik !== nik);
   localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
-  showToast('Akun berhasil dihapus.');
+  showToast('Akun berhasil dihapus.' + (GAS_URL ? ' (Dinonaktifkan di Google Sheets — tidak bisa login lagi di perangkat manapun.)' : ''));
   renderHRDashboard();
 }
 
@@ -2318,8 +2454,17 @@ function renderAbsenTab(){
     ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Sabtu, Minggu, dan tanggal libur nasional tidak mengurangi XP maupun Skor KPI. Presensi reguler HR tidak diwajibkan.</span></div>`:`
     <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>
     <h2 class="section-title">${isHr?'Shift HR':'Pilih Shift Kerja'}</h2>${isHr?`<div class="shift-grid"><div class="shift-tile selected" style="grid-column:1/-1"><div class="label">Pagi • Senin–Jumat</div><div class="time mono">${HR_WORK_SHIFT.start} - ${HR_WORK_SHIFT.end}</div></div></div>`:`<div class="shift-grid">${Object.entries(SHIFTS).map(([k,s])=>`<div class="shift-tile ${state.selectedShift===k?'selected':''}" onclick="selectShift('${k}')"><div class="label">${s.label}</div><div class="time mono">${s.start} - ${s.end}</div></div>`).join('')}</div>`}
-    <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button></div><div id="resultSlot"></div>`}`;
+    <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button></div><div id="resultSlot"></div>`}`;
   updateLocationBadgeUI(); if(!off)startCamera();
+}
+
+function capturePhotoDataUrl_(){
+  const video=document.getElementById('camVideo'), canvas=document.getElementById('camCanvas');
+  if(!video||!canvas||!video.videoWidth) return null;
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  try { return canvas.toDataURL('image/jpeg',0.7); } catch(e){ console.warn('Gagal capture foto:',e); return null; }
 }
 
 function capturePhotoAndAbsen(){
@@ -2330,6 +2475,7 @@ function capturePhotoAndAbsen(){
     if(state.distanceToOffice===null){showToast('⚠️ Gagal membaca GPS! Pastikan izin lokasi aktif.');return;}
     if(state.distanceToOffice>MAX_DISTANCE_METERS){showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 300 meter.`);return;}
   }
+  const capturedPhoto=capturePhotoDataUrl_();
   const now=new Date();
   const shift=isHr?HR_WORK_SHIFT:SHIFTS[state.selectedShift];
   const timeStr=now.toTimeString().slice(0,5);
@@ -2346,10 +2492,10 @@ function capturePhotoAndAbsen(){
   state.activeProfile.xp=(state.activeProfile.xp||0)+xpEarned;
   state.activeProfile.streak=(state.activeProfile.streak||0)+1;
   saveProfileChanges();
-  const newRecord={id:Date.now(),date:now.toISOString().slice(0,10),time:timeStr,shift:isHr?'pagi':state.selectedShift,type:state.selectedType,statusText,lat:state.coords.lat,lng:state.coords.lng,xpEarned,role:state.activeProfile.role};
+  const newRecord={id:Date.now(),date:now.toISOString().slice(0,10),time:timeStr,shift:isHr?'pagi':state.selectedShift,type:state.selectedType,statusText,lat:state.coords.lat,lng:state.coords.lng,xpEarned,role:state.activeProfile.role,photo:capturedPhoto||null};
   state.records.unshift(newRecord);localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));
-  stopCamera();fireConfetti();showToast(`🎉 Presensi berhasil! +${xpEarned} XP diperoleh.`);
-  const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px"><div style="font-size:30px">✅</div><div style="font-size:15px;font-weight:800;color:var(--status-positive);margin-top:5px">Presensi ${state.selectedType.toUpperCase()} Berhasil Dicatat</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Shift ${shift.label} • Status: <strong>${statusText}</strong> • +${xpEarned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+  stopCamera();fireConfetti();showToast(capturedPhoto?`🎉 Presensi berhasil! Foto tersimpan. +${xpEarned} XP diperoleh.`:`🎉 Presensi berhasil! +${xpEarned} XP diperoleh. (Foto tidak tersimpan — kamera tidak aktif)`);
+  const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px">${capturedPhoto?`<img src="${capturedPhoto}" alt="Foto presensi" style="width:96px;height:96px;object-fit:cover;border-radius:12px;margin:0 auto 8px;display:block">`:`<div style="font-size:30px">✅</div>`}<div style="font-size:15px;font-weight:800;color:var(--status-positive);margin-top:5px">Presensi ${state.selectedType.toUpperCase()} Berhasil Dicatat</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Shift ${shift.label} • Status: <strong>${statusText}</strong> • +${xpEarned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
 }
 
 function visibleAgendasForUser(){
