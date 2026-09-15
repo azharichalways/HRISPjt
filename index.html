@@ -29,11 +29,17 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  html, body {
+    height: 100%;
+    overflow: hidden; /* hanya #content yang boleh scroll, bukan seluruh halaman */
+  }
+
   body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-main);
     color: var(--text-main);
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh; /* aman untuk browser mobile dengan address bar dinamis */
     display: flex;
     justify-content: center;
     -webkit-font-smoothing: antialiased;
@@ -44,7 +50,8 @@
   #app {
     width: 100%;
     max-width: 480px;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
     background: var(--surface);
     display: flex;
     flex-direction: column;
@@ -277,7 +284,7 @@
   }
 
   .auth-card {
-    padding: 30px 24px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+    padding: 30px 24px; height: 100%; overflow-y: auto; display: flex; flex-direction: column; justify-content: center;
   }
   .auth-card h1 { font-size: 20px; font-weight: 800; color: var(--brand-primary); margin-bottom: 4px; }
   .auth-card p { font-size: 12px; color: var(--text-dim); margin-bottom: 24px; }
@@ -440,7 +447,7 @@
   </div>
 
   <!-- MAIN APP CONTAINER -->
-  <div id="mainScreen" style="display:none; flex-direction:column; min-height:100vh;">
+  <div id="mainScreen" style="display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden;">
     
     <!-- TOPBAR -->
     <div class="topbar">
@@ -867,7 +874,7 @@ function showMainScreen() {
   document.getElementById('mainScreen').style.display = 'flex';
 
   const u = state.activeProfile;
-  document.getElementById('hdrNama').innerHTML = `${u.nama} <span class="role-badge role-${u.role}">${u.role}</span>`;
+  document.getElementById('hdrNama').innerHTML = `${u.nama} <span class="role-badge role-${u.role}">${roleLabel(u.role)}</span>`;
   document.getElementById('hdrSub').textContent = `${u.brand} • NIK ${u.nik}`;
 
   updateGamifyBar();
@@ -1040,7 +1047,7 @@ function renderProfilTab() {
         <span class="avatar-edit-badge">Ganti</span>
       </div>
       <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(event)">
-      <div style="flex:1;min-width:0;"><div class="profile-name">${u.nama}</div><div class="profile-meta">${u.brand} • NIK ${u.nik}</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="role-badge role-${u.role}">${u.role}</span>${u.photo ? `<span style="font-size:10px;color:var(--brand-primary);cursor:pointer;font-weight:700;" onclick="removeProfilePhoto()">Hapus Foto</span>` : ''}</div></div>
+      <div style="flex:1;min-width:0;"><div class="profile-name">${u.nama}</div><div class="profile-meta">${u.brand} • NIK ${u.nik}</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="role-badge role-${u.role}">${roleLabel(u.role)}</span>${u.photo ? `<span style="font-size:10px;color:var(--brand-primary);cursor:pointer;font-weight:700;" onclick="removeProfilePhoto()">Hapus Foto</span>` : ''}</div></div>
     </div>
     <details class="collapse-card" open>
       <summary>📊 Ringkasan Skor & Kedisiplinan <span style="font-size:9px;color:var(--brand-primary);">${discPct}%</span></summary>
@@ -1293,6 +1300,10 @@ function capturePhotoAndAbsen() {
       <button class="btn secondary" style="margin-top:14px;" onclick="switchTab('home',true)">Kembali ke Beranda</button>
     </div>
   `;
+}
+
+function roleLabel(role) {
+  return { karyawan: 'Anggota Tim', leader: 'Leader', hr: 'HR Admin' }[role] || role;
 }
 
 function timeToMinutes(str) {
@@ -2133,7 +2144,7 @@ function renderHRDashboard() {
       <div class="title">Pusat Administrasi & Keputusan</div>
       <div class="desc">Kelola akun, pantau kinerja, tindak lanjuti ide yang telah lolos review Leader, dan kelola agenda perusahaan.</div>
       <div class="home-summary">
-        <div class="mini-stat"><div class="value">${employees}</div><div class="label">Karyawan</div></div>
+        <div class="mini-stat"><div class="value">${employees}</div><div class="label">Anggota Tim</div></div>
         <div class="mini-stat"><div class="value">${leaders}</div><div class="label">Leader</div></div>
         <div class="mini-stat"><div class="value">${totalPending}</div><div class="label">Keputusan HR</div></div>
       </div>
@@ -2192,8 +2203,8 @@ function renderHRSubTabContent() {
         
         <label>Role Hak Akses</label>
         <select id="hrRole" onchange="toggleLeaderSelectOption()">
-          <option value="leader">Leader / Manajer (Wajib Dibuat Pertama)</option>
-          <option value="karyawan">Karyawan Biasa</option>
+          <option value="leader">Leader (Wajib Dibuat Pertama)</option>
+          <option value="karyawan">Anggota Tim</option>
           <option value="hr">HR Admin</option>
         </select>
 
@@ -2201,7 +2212,7 @@ function renderHRSubTabContent() {
           <label style="color:var(--brand-primary); font-weight:700;">📌 Pilih Leader Penanggung Jawab Tim *</label>
           ${registeredLeaders.length === 0 ? `
             <div style="background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; padding:8px 10px; border-radius:8px; font-size:11px;">
-              ⚠️ <strong>Belum ada Leader terdaftar!</strong> HR harus membuat minimal 1 akun Leader terlebih dahulu sebelum menambah Karyawan.
+              ⚠️ <strong>Belum ada Leader terdaftar!</strong> HR harus membuat minimal 1 akun Leader terlebih dahulu sebelum menambah Anggota Tim.
             </div>
           ` : `
             <select id="hrLeaderNik">
@@ -2232,6 +2243,7 @@ function renderHRSubTabContent() {
       </div>
 
       <h2 class="section-title">Daftar Akun Terdaftar (${state.allUsers.length})</h2>
+      <div id="hrEditUserSlot"></div>
       <div class="card" id="hrUserList"></div>
     `;
 
@@ -2296,7 +2308,7 @@ async function hrAddEmployee() {
   }
 
   if (role === 'karyawan' && !leaderNik) {
-    showToast('⚠️ Wajib memilih Leader penanggung jawab untuk Karyawan!');
+    showToast('⚠️ Wajib memilih Leader penanggung jawab untuk Anggota Tim!');
     return;
   }
 
@@ -2353,15 +2365,98 @@ function renderHRUserList() {
     return `
       <div class="hist-row">
         <div class="l">
-          <div class="d">${u.nama} <span class="role-badge role-${u.role}">${u.role}</span></div>
+          <div class="d">${u.nama} <span class="role-badge role-${u.role}">${roleLabel(u.role)}</span></div>
           <div class="s">${u.brand} • NIK ${u.nik} • Kode: <strong class="mono">${u.kodeUnik}</strong>${leaderInfo}</div>
         </div>
-        <div class="r">
+        <div class="r" style="display:flex; gap:6px;">
+          <button class="btn secondary" style="padding:4px 8px; font-size:11px;" onclick="hrEditUser('${u.nik}')">Edit</button>
           <button class="btn secondary" style="padding:4px 8px; font-size:11px;" onclick="hrDeleteUser('${u.nik}')">Hapus</button>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function hrEditUser(nik) {
+  initUsers();
+  const u = state.allUsers.find(x => x.nik === nik);
+  const slot = document.getElementById('hrEditUserSlot');
+  if (!u || !slot) return;
+  const leaders = state.allUsers.filter(l => l.role === 'leader' && l.nik !== u.nik);
+
+  slot.innerHTML = `
+    <div class="card" style="background:#fffbeb; border-color:#fde68a;">
+      <div style="font-weight:800; font-size:13px; margin-bottom:10px;">✏️ Edit Akun: ${u.nama}</div>
+      <label>Nama Lengkap</label>
+      <input id="editNama" value="${u.nama}">
+      <label>Brand Perusahaan</label>
+      <input id="editBrand" value="${u.brand}">
+      <label>Role Hak Akses</label>
+      <select id="editRole" onchange="toggleEditLeaderSelect()">
+        <option value="karyawan" ${u.role==='karyawan'?'selected':''}>Anggota Tim</option>
+        <option value="leader" ${u.role==='leader'?'selected':''}>Leader</option>
+        <option value="hr" ${u.role==='hr'?'selected':''}>HR Admin</option>
+      </select>
+      <div id="editLeaderGroup" style="margin-bottom:10px; display:${u.role==='karyawan'?'block':'none'};">
+        <label style="color:var(--brand-primary); font-weight:700;">📌 Leader Penanggung Jawab</label>
+        <select id="editLeaderNik">
+          ${leaders.map(l => `<option value="${l.nik}" ${String(u.leaderNik)===String(l.nik)?'selected':''}>${l.nama} (${l.brand}) - NIK ${l.nik}</option>`).join('')}
+        </select>
+      </div>
+      <label>Kode Unik (3 Angka)</label>
+      <input id="editKode" maxlength="3" class="mono" value="${u.kodeUnik}">
+      <label>Password Baru <span style="font-weight:400; color:#94a3b8;">(kosongkan jika tidak diganti)</span></label>
+      <input id="editPass" maxlength="2" class="mono" placeholder="••">
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button class="btn" style="margin:0;" onclick="hrSaveEditedUser('${u.nik}')">💾 Simpan Perubahan</button>
+        <button class="btn secondary" style="margin:0;" onclick="document.getElementById('hrEditUserSlot').innerHTML=''">Batal</button>
+      </div>
+    </div>
+  `;
+  slot.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleEditLeaderSelect() {
+  const role = document.getElementById('editRole').value;
+  const group = document.getElementById('editLeaderGroup');
+  if (group) group.style.display = role === 'karyawan' ? 'block' : 'none';
+}
+
+async function hrSaveEditedUser(nik) {
+  initUsers();
+  const idx = state.allUsers.findIndex(x => x.nik === nik);
+  if (idx === -1) return;
+  const u = state.allUsers[idx];
+
+  const nama = document.getElementById('editNama').value.trim();
+  const brand = document.getElementById('editBrand').value.trim();
+  const role = document.getElementById('editRole').value;
+  const kodeUnik = document.getElementById('editKode').value.trim();
+  const passCode = document.getElementById('editPass').value.trim();
+  const leaderSelect = document.getElementById('editLeaderNik');
+  const leaderNik = (role === 'karyawan') ? (leaderSelect ? leaderSelect.value : '') : '';
+
+  if (!nama || !brand || !kodeUnik) { showToast('⚠️ Nama, brand, dan Kode Unik wajib diisi.'); return; }
+  if (kodeUnik.length !== 3 || !/^\d{3}$/.test(kodeUnik)) { showToast('⚠️ Kode Unik harus 3 digit angka.'); return; }
+  if (passCode && passCode.length !== 2) { showToast('⚠️ Password baru harus 2 karakter (atau kosongkan).'); return; }
+  if (role === 'karyawan' && !leaderNik) { showToast('⚠️ Wajib memilih Leader penanggung jawab untuk Anggota Tim.'); return; }
+  if (state.allUsers.some(x => x.nik !== nik && String(x.kodeUnik) === String(kodeUnik))) {
+    showToast('⚠️ Kode Unik ini sudah dipakai akun lain.'); return;
+  }
+
+  const updated = { ...u, nama, brand, role, kodeUnik, leaderNik };
+  if (passCode) updated.passCode = passCode;
+
+  if (GAS_URL) {
+    const res = await gasCall('saveUser', { ...updated, actorNik: state.activeProfile.nik });
+    if (!res.ok) { showToast('❌ Gagal menyimpan ke server: ' + (res.error || 'unknown error')); return; }
+  }
+
+  state.allUsers[idx] = updated;
+  localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+  document.getElementById('hrEditUserSlot').innerHTML = '';
+  showToast('✅ Perubahan akun ' + nama + ' tersimpan.' + (GAS_URL ? '' : ' (Catatan: GAS_URL belum diisi, perubahan baru tersimpan lokal.)'));
+  renderHRUserList();
 }
 
 async function hrDeleteUser(nik) {
@@ -2594,7 +2689,7 @@ function renderHomeTab(){
   const unread=getUnreadHRMessages(nik); const teamAgendas=state.agendas.filter(a=>a.scope==='team'&&a.teamLeaderNik===state.activeProfile.leaderNik&&!state.agendaUserStatus[a.id+'_'+nik]);
   c.innerHTML=`
     ${unread.length?`<div class="important-notice" onclick="renderInboxPage()"><div>🚨</div><div><div class="n-title">Pesan penting dari HR (${unread.length})</div><div class="n-text">${unread[0].subject||unread[0].text} • Ketuk untuk membaca.</div></div></div>`:''}
-    <div class="home-hero"><div class="eyebrow">Beranda Karyawan</div><div class="title">Halo, ${state.activeProfile.nama}</div><div class="desc">Presensi, aktivitas kerja, pengajuan, dan perkembangan Anda dalam satu halaman.</div><div class="home-summary"><div class="mini-stat"><div class="value">${state.activeProfile.xp||0}</div><div class="label">XP</div></div><div class="mini-stat"><div class="value">🔥 ${state.activeProfile.streak||0}</div><div class="label">Streak</div></div><div class="mini-stat"><div class="value">${v4KpiScore(nik)}</div><div class="label">Skor KPI</div></div></div></div>
+    <div class="home-hero"><div class="eyebrow">Beranda Anggota Tim</div><div class="title">Halo, ${state.activeProfile.nama}</div><div class="desc">Presensi, aktivitas kerja, pengajuan, dan perkembangan Anda dalam satu halaman.</div><div class="home-summary"><div class="mini-stat"><div class="value">${state.activeProfile.xp||0}</div><div class="label">XP</div></div><div class="mini-stat"><div class="value">🔥 ${state.activeProfile.streak||0}</div><div class="label">Streak</div></div><div class="mini-stat"><div class="value">${v4KpiScore(nik)}</div><div class="label">Skor KPI</div></div></div></div>
     ${teamAgendas.length?`<div class="notice-strip" onclick="switchTab('agenda',true)" style="cursor:pointer"><span>👥</span><span>${teamAgendas.length} agenda tim dari Leader menunggu Anda.</span><span class="count">${teamAgendas.length}</span></div>`:''}
     <div class="home-section-title">Aksi Cepat</div><div class="home-grid">
       <button class="home-tile" onclick="switchTab('absen',true)"><div class="icon">📍</div><div class="title">Presensi</div><div class="desc">Masuk & pulang dengan GPS + foto.</div></button>
@@ -2632,13 +2727,23 @@ function renderAbsenTab(){
 function capturePhotoDataUrl_(){
   const video=document.getElementById('camVideo'), canvas=document.getElementById('camCanvas');
   if(!video||!canvas||!video.videoWidth) return null;
-  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  // Perkecil resolusi maksimal 480px di sisi terpanjang + kualitas 0.5 supaya file kecil (hemat kuota Drive).
+  const MAX_DIM=480;
+  const ratio=Math.min(1, MAX_DIM/Math.max(video.videoWidth, video.videoHeight));
+  canvas.width=Math.round(video.videoWidth*ratio); canvas.height=Math.round(video.videoHeight*ratio);
   const ctx=canvas.getContext('2d');
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  try { return canvas.toDataURL('image/jpeg',0.7); } catch(e){ console.warn('Gagal capture foto:',e); return null; }
+  try { return canvas.toDataURL('image/jpeg',0.5); } catch(e){ console.warn('Gagal capture foto:',e); return null; }
 }
 
-function capturePhotoAndAbsen(){
+// Menentukan warna status presensi: hijau=tepat waktu, kuning=hadir briefing, merah=telat/pulang awal.
+function attendanceStatusStyle_(statusText){
+  if(statusText==='Terlambat Masuk'||statusText==='Pulang Awal') return {color:'var(--status-negative)',bg:'var(--status-negative-bg)',emoji:'🔴'};
+  if(statusText==='Hadir Briefing') return {color:'var(--status-warning)',bg:'var(--status-warning-bg)',emoji:'🟡'};
+  return {color:'var(--status-positive)',bg:'var(--status-positive-bg)',emoji:'🟢'};
+}
+
+async function capturePhotoAndAbsen(){
   const isHr = state.activeProfile.role==='hr';
   if(isHr && isHRNonWorkingDay()){showToast('🏖️ Hari libur HR tidak memengaruhi XP atau KPI.');return;}
   if(isHr) state.selectedShift='pagi';
@@ -2646,6 +2751,17 @@ function capturePhotoAndAbsen(){
     if(state.distanceToOffice===null){showToast('⚠️ Gagal membaca GPS! Pastikan izin lokasi aktif.');return;}
     if(state.distanceToOffice>MAX_DISTANCE_METERS){showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 300 meter.`);return;}
   }
+
+  const today=new Date().toISOString().slice(0,10);
+  // Cegah double-absen di perangkat ini (pengecekan cepat sebelum kirim ke server).
+  if(state.records.some(r=>r.date===today && r.type===state.selectedType)){
+    showToast(`⛔ Anda sudah presensi ${state.selectedType==='masuk'?'masuk':'pulang'} hari ini. Tidak bisa absen dobel.`);
+    return;
+  }
+
+  const btn=document.getElementById('btnCapture');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Menyimpan presensi...';}
+
   const capturedPhoto=capturePhotoDataUrl_();
   const now=new Date();
   const shift=isHr?HR_WORK_SHIFT:SHIFTS[state.selectedShift];
@@ -2660,14 +2776,26 @@ function capturePhotoAndAbsen(){
   }else{
     const eMin=timeToMinutes(shift.end), nMin=timeToMinutes(timeStr);if(nMin<eMin){statusText='Pulang Awal';xpEarned=10;}
   }
+
+  const newRecord={id:Date.now(),date:today,time:timeStr,shift:isHr?'pagi':state.selectedShift,type:state.selectedType,statusText,lat:state.coords.lat,lng:state.coords.lng,xpEarned,role:state.activeProfile.role,photo:capturedPhoto||null};
+
+  // Server adalah sumber kebenaran untuk cegah dobel-absen (menangani kasus multi-perangkat/multi-tab).
+  if(GAS_URL){
+    const res=await gasCall('addAttendance',{ id:newRecord.id, nik:state.activeProfile.nik, date:newRecord.date, time:newRecord.time, shift:newRecord.shift, type:newRecord.type, statusText:newRecord.statusText, lat:newRecord.lat, lng:newRecord.lng, distanceM: state.distanceToOffice, xpEarned:newRecord.xpEarned, source:'web', photoBase64: capturedPhoto||'' });
+    if(!res.ok){
+      showToast('⛔ '+(res.error||'Gagal menyimpan presensi ke server.'));
+      if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}
+      return;
+    }
+  }
+
   state.activeProfile.xp=(state.activeProfile.xp||0)+xpEarned;
   state.activeProfile.streak=(state.activeProfile.streak||0)+1;
   saveProfileChanges();
-  const newRecord={id:Date.now(),date:now.toISOString().slice(0,10),time:timeStr,shift:isHr?'pagi':state.selectedShift,type:state.selectedType,statusText,lat:state.coords.lat,lng:state.coords.lng,xpEarned,role:state.activeProfile.role,photo:capturedPhoto||null};
   state.records.unshift(newRecord);localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));
-  if(GAS_URL) gasCall('addAttendance', { id:newRecord.id, nik:state.activeProfile.nik, date:newRecord.date, time:newRecord.time, shift:newRecord.shift, type:newRecord.type, statusText:newRecord.statusText, lat:newRecord.lat, lng:newRecord.lng, distanceM: state.distanceToOffice, xpEarned:newRecord.xpEarned, source:'web' });
   stopCamera();fireConfetti();showToast(capturedPhoto?`🎉 Presensi berhasil! Foto tersimpan. +${xpEarned} XP diperoleh.`:`🎉 Presensi berhasil! +${xpEarned} XP diperoleh. (Foto tidak tersimpan — kamera tidak aktif)`);
-  const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px">${capturedPhoto?`<img src="${capturedPhoto}" alt="Foto presensi" style="width:96px;height:96px;object-fit:cover;border-radius:12px;margin:0 auto 8px;display:block">`:`<div style="font-size:30px">✅</div>`}<div style="font-size:15px;font-weight:800;color:var(--status-positive);margin-top:5px">Presensi ${state.selectedType.toUpperCase()} Berhasil Dicatat</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Shift ${shift.label} • Status: <strong>${statusText}</strong> • +${xpEarned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+  const st=attendanceStatusStyle_(statusText);
+  const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px;background:${st.bg};border-color:${st.color}">${capturedPhoto?`<img src="${capturedPhoto}" alt="Foto presensi" style="width:96px;height:96px;object-fit:cover;border-radius:12px;margin:0 auto 8px;display:block;border:2px solid ${st.color}">`:`<div style="font-size:30px">${st.emoji}</div>`}<div style="font-size:15px;font-weight:800;color:${st.color};margin-top:5px">Presensi ${state.selectedType.toUpperCase()} Berhasil Dicatat</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Shift ${shift.label} • Status: <strong style="color:${st.color}">${st.emoji} ${statusText}</strong> • +${xpEarned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
 }
 
 function visibleAgendasForUser(){
@@ -2748,11 +2876,11 @@ function renderHRDashboard(){
 }
 
 function renderKinerjaTab(){
-  const c=document.getElementById('content');initUsers();const users=state.allUsers.map(u=>({...u,perf:getUserPerformance(u.nik),score:v4KpiScore(u.nik)})).sort((a,b)=>b.score-a.score);c.innerHTML=`<div class="home-hero"><div class="eyebrow">KPI & Gamifikasi</div><div class="title">Skor Kinerja Semua Role</div><div class="desc">Disiplin, kontribusi, ide, kegiatan, streak dan XP menjadi indikator transparan. HR ikut memiliki KPI gamifikasi.</div></div>${users.map(u=>`<div class="member-card"><div class="member-head"><div><div class="member-name">${u.nama} <span class="role-badge role-${u.role}">${u.role}</span></div><div class="member-meta">${u.brand} • ${u.xp||0} XP • 🔥 ${u.streak||0}</div></div><div class="kpi-ring" style="--p:${u.score}"><strong>${u.score}</strong></div></div><div class="metric-row"><div class="metric-box"><strong>${u.perf.discipline}%</strong><span>Disiplin</span></div><div class="metric-box"><strong>${u.perf.total}</strong><span>Presensi</span></div><div class="metric-box"><strong>${u.perf.good}</strong><span>Kontribusi</span></div><div class="metric-box"><strong>${u.perf.activities}</strong><span>Kegiatan</span></div></div></div>`).join('')}`;
+  const c=document.getElementById('content');initUsers();const users=state.allUsers.map(u=>({...u,perf:getUserPerformance(u.nik),score:v4KpiScore(u.nik)})).sort((a,b)=>b.score-a.score);c.innerHTML=`<div class="home-hero"><div class="eyebrow">KPI & Gamifikasi</div><div class="title">Skor Kinerja Semua Role</div><div class="desc">Disiplin, kontribusi, ide, kegiatan, streak dan XP menjadi indikator transparan. HR ikut memiliki KPI gamifikasi.</div></div>${users.map(u=>`<div class="member-card"><div class="member-head"><div><div class="member-name">${u.nama} <span class="role-badge role-${u.role}">${roleLabel(u.role)}</span></div><div class="member-meta">${u.brand} • ${u.xp||0} XP • 🔥 ${u.streak||0}</div></div><div class="kpi-ring" style="--p:${u.score}"><strong>${u.score}</strong></div></div><div class="metric-row"><div class="metric-box"><strong>${u.perf.discipline}%</strong><span>Disiplin</span></div><div class="metric-box"><strong>${u.perf.total}</strong><span>Presensi</span></div><div class="metric-box"><strong>${u.perf.good}</strong><span>Kontribusi</span></div><div class="metric-box"><strong>${u.perf.activities}</strong><span>Kegiatan</span></div></div></div>`).join('')}`;
 }
 
 function renderHRMessagesPage(){
-  v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'),sent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi HR</strong></div><div class="card"><label>Penerima</label><select id="msgToNik">${recipients.map(u=>`<option value="${u.nik}">${u.nama} — ${u.role}</option>`).join('')}</select><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Tindak lanjut evaluasi"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Pesan pribadi akan tampil sebagai notifikasi penting pada akun penerima."></textarea><label>Bonus XP untuk Penerima</label><select id="msgXpBonus">${v5XpOptions(20)}</select><div style="font-size:10px;color:#64748b;margin:-3px 0 9px">XP diberikan langsung saat pesan penting dikirim.</div><button class="btn" onclick="sendHRPrivateMessage()">🚨 Kirim Pesan Penting + XP</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'} → ${m.toName}</div><div class="message-meta">${m.date} • ${m.readAt?'Sudah dibaca':'Belum dibaca'}${m.xpBonus?` • ⭐ +${m.xpBonus} XP`:''}</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi yang dikirim.</div>'}`;
+  v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'),sent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi HR</strong></div><div class="card"><label>Penerima</label><select id="msgToNik">${recipients.map(u=>`<option value="${u.nik}">${u.nama} — ${roleLabel(u.role)}</option>`).join('')}</select><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Tindak lanjut evaluasi"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Pesan pribadi akan tampil sebagai notifikasi penting pada akun penerima."></textarea><label>Bonus XP untuk Penerima</label><select id="msgXpBonus">${v5XpOptions(20)}</select><div style="font-size:10px;color:#64748b;margin:-3px 0 9px">XP diberikan langsung saat pesan penting dikirim.</div><button class="btn" onclick="sendHRPrivateMessage()">🚨 Kirim Pesan Penting + XP</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'} → ${m.toName}</div><div class="message-meta">${m.date} • ${m.readAt?'Sudah dibaca':'Belum dibaca'}${m.xpBonus?` • ⭐ +${m.xpBonus} XP`:''}</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi yang dikirim.</div>'}`;
 }
 function sendHRPrivateMessage(){const toNik=document.getElementById('msgToNik').value,subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=parseInt(document.getElementById('msgXpBonus').value)||10;if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}const u=state.allUsers.find(x=>x.nik===toNik);const msg={id:Date.now(),fromNik:state.activeProfile.nik,toNik,toName:u?.nama||toNik,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:new Date().toISOString().slice(0,10),readAt:null};state.privateMessages.unshift(msg);localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));if(GAS_URL) gasCall('sendPrivateMessage', msg);v5AddXpToUser(toNik,xpBonus);showToast(`🚨 Pesan penting dikirim ke ${u?.nama||toNik} • +${xpBonus} XP`);renderHRMessagesPage();}
 
@@ -2937,7 +3065,7 @@ function renderIdeTab(){
 
 function renderKinerjaTab(){
   v6ReconcileAllUsers(); initUsers(); const c=document.getElementById('content'); const users=state.allUsers.map(u=>({...u,k:v6Kpi(u.nik),perf:getUserPerformance(u.nik),pen:v6PenaltyStats(u.nik),sla:u.role==='leader'?v6LeaderSlaStats(u.nik):null})).sort((a,b)=>b.k.score-a.k.score);
-  c.innerHTML=`<div class="home-hero"><div class="eyebrow">KPI Digital & Gamifikasi</div><div class="title">Skor yang Bisa Dijelaskan</div><div class="desc">Setiap skor dibentuk dari indikator yang tercatat di aplikasi. <strong>Kinerja lapangan belum dimasukkan</strong> sampai perusahaan menetapkan KPI operasional yang terukur.</div></div><div style="padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:12px;margin-bottom:12px;font-size:10px;color:#9a3412"><strong>⚠️ Batas skor:</strong> ini mengukur perilaku dan proses digital, bukan otomatis produktivitas atau kualitas kerja lapangan.</div>${users.map(u=>`<div class="member-card"><div class="member-head"><div><div class="member-name">${u.nama} <span class="role-badge role-${u.role}">${u.role}</span></div><div class="member-meta">${u.brand} • ${u.xp||0} XP • 🔥 ${u.streak||0}${u.sla?` • SLA ${u.sla.score}%`:''}</div></div><div class="kpi-ring" style="--p:${u.k.score}"><strong>${u.k.score}</strong></div></div><div class="metric-row"><div class="metric-box"><strong>${v6AttendanceScore(u.nik)}</strong><span>Disiplin</span></div><div class="metric-box"><strong>${u.pen.alpha}</strong><span>Alpha</span></div><div class="metric-box"><strong>${v6AgendaStats(u.nik).rate}%</strong><span>Agenda</span></div><div class="metric-box"><strong>${u.perf.good}</strong><span>Kontribusi</span></div>${u.sla?`<div class="metric-box"><strong>${u.sla.avgHours}j</strong><span>Avg Respons</span></div>`:''}</div>${v6KpiBreakdownHtml(u.nik)}</div>`).join('')}`;
+  c.innerHTML=`<div class="home-hero"><div class="eyebrow">KPI Digital & Gamifikasi</div><div class="title">Skor yang Bisa Dijelaskan</div><div class="desc">Setiap skor dibentuk dari indikator yang tercatat di aplikasi. <strong>Kinerja lapangan belum dimasukkan</strong> sampai perusahaan menetapkan KPI operasional yang terukur.</div></div><div style="padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:12px;margin-bottom:12px;font-size:10px;color:#9a3412"><strong>⚠️ Batas skor:</strong> ini mengukur perilaku dan proses digital, bukan otomatis produktivitas atau kualitas kerja lapangan.</div>${users.map(u=>`<div class="member-card"><div class="member-head"><div><div class="member-name">${u.nama} <span class="role-badge role-${u.role}">${roleLabel(u.role)}</span></div><div class="member-meta">${u.brand} • ${u.xp||0} XP • 🔥 ${u.streak||0}${u.sla?` • SLA ${u.sla.score}%`:''}</div></div><div class="kpi-ring" style="--p:${u.k.score}"><strong>${u.k.score}</strong></div></div><div class="metric-row"><div class="metric-box"><strong>${v6AttendanceScore(u.nik)}</strong><span>Disiplin</span></div><div class="metric-box"><strong>${u.pen.alpha}</strong><span>Alpha</span></div><div class="metric-box"><strong>${v6AgendaStats(u.nik).rate}%</strong><span>Agenda</span></div><div class="metric-box"><strong>${u.perf.good}</strong><span>Kontribusi</span></div>${u.sla?`<div class="metric-box"><strong>${u.sla.avgHours}j</strong><span>Avg Respons</span></div>`:''}</div>${v6KpiBreakdownHtml(u.nik)}</div>`).join('')}`;
 }
 
 function renderLeaderPerformancePage(){
@@ -3032,7 +3160,7 @@ renderAgendaSubTabContent=function(){
     const container=document.getElementById('agendaSubTabContent');
     v4EnsureStores();initUsers();
     const recipients=state.allUsers.filter(u=>u.role!=='hr'),sent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).sort((a,b)=>b.id-a.id);
-    container.innerHTML=`<div class="card"><div style="font-weight:800;font-size:13px;margin-bottom:9px">📨 Pesan Pribadi HR</div><label>Penerima</label><select id="msgToNik">${recipients.map(u=>`<option value="${u.nik}">${u.nama} — ${u.role}</option>`).join('')}</select><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Tindak lanjut evaluasi"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Pesan pribadi akan tampil sebagai notifikasi penting pada akun penerima."></textarea><label>Bonus XP untuk Penerima</label><select id="msgXpBonus">${v5XpOptions(20)}</select><div class="form-hint">Bonus XP 10–100 hanya untuk pesan HR yang memang merupakan apresiasi/penugasan resmi.</div><button class="btn" onclick="sendHRPrivateMessageV7()">🚨 Kirim Pesan Penting</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'} → ${m.toName}</div><div class="message-meta">${m.date} • ${m.readAt?'Sudah dibaca':'Belum dibaca'}${m.xpBonus?` • ⭐ +${m.xpBonus} XP`:''}</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi yang dikirim.</div>'}`;
+    container.innerHTML=`<div class="card"><div style="font-weight:800;font-size:13px;margin-bottom:9px">📨 Pesan Pribadi HR</div><label>Penerima</label><select id="msgToNik">${recipients.map(u=>`<option value="${u.nik}">${u.nama} — ${roleLabel(u.role)}</option>`).join('')}</select><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Tindak lanjut evaluasi"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Pesan pribadi akan tampil sebagai notifikasi penting pada akun penerima."></textarea><label>Bonus XP untuk Penerima</label><select id="msgXpBonus">${v5XpOptions(20)}</select><div class="form-hint">Bonus XP 10–100 hanya untuk pesan HR yang memang merupakan apresiasi/penugasan resmi.</div><button class="btn" onclick="sendHRPrivateMessageV7()">🚨 Kirim Pesan Penting</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.map(m=>`<div class="message-card"><div class="message-title">${m.subject||'Pesan HR'} → ${m.toName}</div><div class="message-meta">${m.date} • ${m.readAt?'Sudah dibaca':'Belum dibaca'}${m.xpBonus?` • ⭐ +${m.xpBonus} XP`:''}</div><div class="message-body">${m.text}</div></div>`).join(''):'<div class="empty">Belum ada pesan pribadi yang dikirim.</div>'}`;
     return;
   }
   v7BaseAgendaSub();
