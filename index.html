@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Absensi Geoface PT Putra Jaya Telesindo</title>
+<title>Absensi Geoface V4 — PT Putra Jaya Telesindo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -510,7 +510,8 @@ function mapBootstrapToCaches(bs) {
   if (Array.isArray(bs.users)) {
     initUsers();
     bs.users.forEach(su => {
-      const idx = state.allUsers.findIndex(x => x.nik === su.nik);
+      su = { ...su, nik: String(su.nik), leaderNik: String(su.leaderNik || '') };
+      const idx = state.allUsers.findIndex(x => String(x.nik) === su.nik);
       if (idx >= 0) state.allUsers[idx] = { ...state.allUsers[idx], ...su };
       else state.allUsers.push(su);
     });
@@ -524,7 +525,7 @@ function mapBootstrapToCaches(bs) {
       const nik = String(r.nik);
       (byNik[nik] = byNik[nik] || []).push({
         id: r.id, date: r.date, time: r.time, shift: r.shift, type: r.type,
-        statusText: r.status_text, lat: r.lat, lng: r.lng, xpEarned: num_(r.xp_earned), role: r.role, photo: null
+        statusText: r.status_text, lat: r.lat, lng: r.lng, xpEarned: num_(r.xp_earned), role: r.role, photo: r.photo_url || null
       });
     });
     Object.keys(byNik).forEach(nik => {
@@ -549,7 +550,7 @@ function mapBootstrapToCaches(bs) {
     const mapped = bs.goodDeeds.map(h => ({
       id: h.id, date: h.date, title: h.title, essay: h.essay, status: h.status,
       leaderNote: h.leader_note || '-', xpAwarded: truthy_(h.xp_awarded),
-      nik: h.nik, nama: h.nama, brand: h.brand, leaderNik: h.leader_nik || ''
+      nik: String(h.nik), nama: h.nama, brand: h.brand, leaderNik: String(h.leader_nik || '')
     }));
     localStorage.setItem('halbaik_all', JSON.stringify(mapped));
   }
@@ -561,7 +562,7 @@ function mapBootstrapToCaches(bs) {
       leaderNote: i.leader_note || '-', hrNote: i.hr_note || '-', slaStatus: i.sla_status || '',
       ideaSubmitXpAwarded: truthy_(i.submit_xp_awarded), leaderStageXpAwarded: truthy_(i.leader_stage_xp_awarded),
       hrAcceptedXpAwarded: truthy_(i.hr_accepted_xp_awarded), implementedXpAwarded: truthy_(i.implemented_xp_awarded),
-      nik: i.nik, nama: i.nama, role: i.role, brand: i.brand, leaderNik: i.leader_nik || ''
+      nik: String(i.nik), nama: i.nama, role: i.role, brand: i.brand, leaderNik: String(i.leader_nik || '')
     }));
     localStorage.setItem('ideas_all', JSON.stringify(mapped));
   }
@@ -570,7 +571,7 @@ function mapBootstrapToCaches(bs) {
   if (Array.isArray(bs.leaves)) {
     const mapped = bs.leaves.map(l => ({
       id: l.id, start: l.start_date, end: l.end_date, ket: l.reason, status: l.status,
-      nik: l.nik, nama: l.nama, leaderNik: l.leader_nik || ''
+      nik: String(l.nik), nama: l.nama, leaderNik: String(l.leader_nik || '')
     }));
     localStorage.setItem('leaves_all', JSON.stringify(mapped));
   }
@@ -590,7 +591,7 @@ function mapBootstrapToCaches(bs) {
       return {
         id: a.id, title: a.title, date: a.date, time: a.time, location: a.location,
         xpBonus: num_(a.xp_bonus), hrXpBonus: old?.hrXpBonus || 0,
-        scope: a.scope || 'company', teamLeaderNik: a.team_leader_nik || '', creatorNik: a.created_by || ''
+        scope: a.scope || 'company', teamLeaderNik: String(a.team_leader_nik || ''), creatorNik: String(a.created_by || '')
       };
     });
     localStorage.setItem('agendas_all', JSON.stringify(mapped));
@@ -610,7 +611,7 @@ function mapBootstrapToCaches(bs) {
   // Pesan pribadi HR
   if (Array.isArray(bs.privateMessages)) {
     const mapped = bs.privateMessages.map(m => ({
-      id: m.id, fromNik: m.from_nik, toNik: m.to_nik, toName: m.to_name, subject: m.subject, text: m.text,
+      id: m.id, fromNik: String(m.from_nik), toNik: String(m.to_nik), toName: m.to_name, subject: m.subject, text: m.text,
       xpBonus: num_(m.xp_bonus), date: m.date, reminderDate: m.reminder_date || '', readAt: m.read_at || null
     }));
     localStorage.setItem('private_messages_all', JSON.stringify(mapped));
@@ -619,7 +620,7 @@ function mapBootstrapToCaches(bs) {
   // Catatan perbaikan Leader — 'status' (mis. Forwarded) tidak ada di Sheet, default 'Forwarded'.
   if (Array.isArray(bs.leaderNotes)) {
     const mapped = bs.leaderNotes.map(n => ({
-      id: n.id, leaderNik: n.leader_nik, leaderName: n.leader_name, employeeNik: n.nik, employeeName: n.employee_name,
+      id: n.id, leaderNik: String(n.leader_nik), leaderName: n.leader_name, employeeNik: String(n.nik), employeeName: n.employee_name,
       category: n.category, note: n.note, date: n.date, status: 'Forwarded', hrReadAt: n.hr_read_at || null, hrReadBy: n.hr_read_by || ''
     }));
     localStorage.setItem('leader_notes_all', JSON.stringify(mapped));
@@ -628,7 +629,7 @@ function mapBootstrapToCaches(bs) {
   // Laporan bulanan Leader
   if (Array.isArray(bs.monthlyReports)) {
     const mapped = bs.monthlyReports.map(r => ({
-      id: r.id, leaderNik: r.leader_nik, leaderName: r.leader_name, month: r.month,
+      id: r.id, leaderNik: String(r.leader_nik), leaderName: r.leader_name, month: r.month,
       teamCount: num_(r.member_count), avgKpi: num_(r.avg_kpi), summary: r.summary,
       date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || ''
     }));
@@ -766,6 +767,7 @@ function initData() {
       syncFromServer().then(success => {
         if (success) {
           loadUserData();
+          renderBroadcastBanner();
           switchTab(state.currentTab || 'home', false);
         }
       });
@@ -780,6 +782,8 @@ function initData() {
   window.addEventListener('popstate', (e) => {
     if (e.state && e.state.tab) {
       switchTab(e.state.tab, false);
+    } else {
+      switchTab('home', false);
     }
   });
 }
@@ -3305,12 +3309,7 @@ renderHRDashboard = function(){
   c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='agenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, broadcast, kegiatan & pesan pribadi.</div></button></div>`;
 };
 
-// Tombol Back fisik/browser: selama user masih login, selalu pulang ke Beranda.
-window.addEventListener('popstate', function(){
-  if(!state.activeProfile) return;
-  switchTab('home', false);
-  history.pushState({tab:'home',v8Guard:true},'', '#home');
-});
+// (Back/forward navigation ditangani oleh listener 'popstate' di initData() — lihat komentar di atasnya.)
 
 window.onload = function() {
   initData();
