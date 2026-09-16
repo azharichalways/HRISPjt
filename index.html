@@ -829,14 +829,25 @@ async function loginUser() {
   if (GAS_URL) {
     const res = await gasCall('login', { kodeUnik: kode, passCode: pass });
     if (res.ok) {
-      // Sinkronkan SELURUH data (akun, presensi, ide, cuti, dst.) dari server ke cache lokal.
+      // FAST LOGIN: tampilkan aplikasi segera setelah kredensial tervalidasi.
+      // Bootstrap data lengkap berjalan di background agar login tidak menunggu pembacaan banyak Sheet.
       state.activeProfile = res.user;
-      if (res.bootstrap) mapBootstrapToCaches(res.bootstrap);
       localStorage.setItem('active_user_session', JSON.stringify(res.user));
       loadUserData();
       showMainScreen();
       showToast('🎉 Selamat datang, ' + res.user.nama + '!');
       if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+      // Jangan di-await: UI sudah dapat dipakai sambil data server disinkronkan.
+      syncFromServer().then(success => {
+        if (success && state.activeProfile) {
+          loadUserData();
+          updateGamifyBar();
+          renderBroadcastBanner();
+          renderBottomNav();
+          switchTab(state.currentTab || 'home', false);
+        }
+      }).catch(err => console.warn('Background sync setelah login gagal:', err));
       return;
     }
     // Kalau server menjawab tegas "salah" (bukan sekadar gagal konek), hentikan di sini.
