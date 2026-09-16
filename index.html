@@ -505,16 +505,24 @@ async function gasCall(action, payload) {
 
 // Ubah hasil bootstrap dari server (kolom Sheet snake_case) jadi bentuk cache localStorage yang dipakai app (camelCase),
 // lalu tulis ke localStorage supaya seluruh fungsi render yang sudah ada (baca dari localStorage) otomatis dapat data terbaru.
+// ===== FAST LOGIN + NOTIFICATION SYNC FIX =====
+// Semua ID dibandingkan sebagai teks yang sudah di-trim agar NIK/leader_nik konsisten.
+function idText_(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+function statusText_(v) { return idText_(v).toLowerCase(); }
+function isPending_(v) { return statusText_(v) === 'pending'; }
+function sameId_(a,b) { return idText_(a) !== '' && idText_(a) === idText_(b); }
+
 function mapBootstrapToCaches(bs) {
-  // Users: gabung (upsert), jangan hapus akun lain yang mungkin sudah di-cache.
+  // Users dari bootstrap adalah snapshot resmi sesuai role. Jangan merge dengan cache lama,
+  // karena akun/relasi leader lama dapat membuat badge notifikasi sempat muncul lalu hilang.
   if (Array.isArray(bs.users)) {
-    initUsers();
-    bs.users.forEach(su => {
-      su = { ...su, nik: String(su.nik), leaderNik: String(su.leaderNik || '') };
-      const idx = state.allUsers.findIndex(x => String(x.nik) === su.nik);
-      if (idx >= 0) state.allUsers[idx] = { ...state.allUsers[idx], ...su };
-      else state.allUsers.push(su);
-    });
+    state.allUsers = bs.users.map(su => ({
+      ...su,
+      nik: idText_(su.nik),
+      kodeUnik: idText_(su.kodeUnik ?? su.kode_unik),
+      leaderNik: idText_(su.leaderNik ?? su.leader_nik),
+      role: idText_(su.role).toLowerCase()
+    }));
     localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
   }
 
@@ -550,7 +558,7 @@ function mapBootstrapToCaches(bs) {
     const mapped = bs.goodDeeds.map(h => ({
       id: h.id, date: h.date, title: h.title, essay: h.essay, status: h.status,
       leaderNote: h.leader_note || '-', xpAwarded: truthy_(h.xp_awarded),
-      nik: String(h.nik), nama: h.nama, brand: h.brand, leaderNik: String(h.leader_nik || '')
+      nik: idText_(h.nik), nama: h.nama, brand: h.brand, leaderNik: idText_(h.leader_nik ?? h.leaderNik)
     }));
     localStorage.setItem('halbaik_all', JSON.stringify(mapped));
   }
@@ -562,7 +570,7 @@ function mapBootstrapToCaches(bs) {
       leaderNote: i.leader_note || '-', hrNote: i.hr_note || '-', slaStatus: i.sla_status || '',
       ideaSubmitXpAwarded: truthy_(i.submit_xp_awarded), leaderStageXpAwarded: truthy_(i.leader_stage_xp_awarded),
       hrAcceptedXpAwarded: truthy_(i.hr_accepted_xp_awarded), implementedXpAwarded: truthy_(i.implemented_xp_awarded),
-      nik: String(i.nik), nama: i.nama, role: i.role, brand: i.brand, leaderNik: String(i.leader_nik || '')
+      nik: idText_(i.nik), nama: i.nama, role: i.role, brand: i.brand, leaderNik: idText_(i.leader_nik ?? i.leaderNik)
     }));
     localStorage.setItem('ideas_all', JSON.stringify(mapped));
   }
@@ -571,7 +579,7 @@ function mapBootstrapToCaches(bs) {
   if (Array.isArray(bs.leaves)) {
     const mapped = bs.leaves.map(l => ({
       id: l.id, start: l.start_date, end: l.end_date, ket: l.reason, status: l.status,
-      nik: String(l.nik), nama: l.nama, leaderNik: String(l.leader_nik || '')
+      nik: idText_(l.nik), nama: l.nama, leaderNik: idText_(l.leader_nik ?? l.leaderNik)
     }));
     localStorage.setItem('leaves_all', JSON.stringify(mapped));
   }
@@ -653,9 +661,13 @@ async function syncFromServer() {
   if (!GAS_URL || !state.activeProfile) return false;
   const res = await gasCall('bootstrap', { nik: state.activeProfile.nik });
   if (!res.ok) { console.warn('syncFromServer gagal:', res.error); return false; }
-  mapBootstrapToCaches(res.bootstrap);
-  state.activeProfile = { ...state.activeProfile, ...res.user };
+  mapBootstrapToCaches(res.bootstrap || {});
+  state.activeProfile = { ...state.activeProfile, ...res.user, nik:idText_(res.user?.nik ?? state.activeProfile.nik), leaderNik:idText_(res.user?.leaderNik ?? res.user?.leader_nik ?? state.activeProfile.leaderNik) };
   localStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
+  // Hydrate state langsung setelah snapshot server selesai agar badge Leader/HR dihitung
+  // dari snapshot yang sama, bukan campuran cache lama + data baru.
+  loadUserData();
+  state.lastServerSyncAt = Date.now();
   return true;
 }
 
@@ -829,14 +841,25 @@ async function loginUser() {
   if (GAS_URL) {
     const res = await gasCall('login', { kodeUnik: kode, passCode: pass });
     if (res.ok) {
-      // Sinkronkan SELURUH data (akun, presensi, ide, cuti, dst.) dari server ke cache lokal.
+      // FAST LOGIN: tampilkan aplikasi segera setelah kredensial tervalidasi.
+      // Bootstrap data lengkap berjalan di background agar login tidak menunggu pembacaan banyak Sheet.
       state.activeProfile = res.user;
-      if (res.bootstrap) mapBootstrapToCaches(res.bootstrap);
       localStorage.setItem('active_user_session', JSON.stringify(res.user));
       loadUserData();
       showMainScreen();
       showToast('🎉 Selamat datang, ' + res.user.nama + '!');
       if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+      // Jangan di-await: UI sudah dapat dipakai sambil data server disinkronkan.
+      syncFromServer().then(success => {
+        if (success && state.activeProfile) {
+          loadUserData();
+          updateGamifyBar();
+          renderBroadcastBanner();
+          renderBottomNav();
+          switchTab(state.currentTab || 'home', false);
+        }
+      }).catch(err => console.warn('Background sync setelah login gagal:', err));
       return;
     }
     // Kalau server menjawab tegas "salah" (bukan sekadar gagal konek), hentikan di sini.
@@ -1921,9 +1944,9 @@ function renderSkorTab() {
 function renderLeaderDashboard() {
   const c = document.getElementById('content');
   const myLeaderNik = state.activeProfile.nik;
-  const pendingLeaves = state.leaves.filter(l => l.status === 'Pending' && (l.leaderNik === myLeaderNik || !l.leaderNik));
-  const pendingHalBaik = state.halBaik.filter(h => h.status === 'Pending' && (h.leaderNik === myLeaderNik || !h.leaderNik));
-  const pendingIdeas = state.ideas.filter(i => i.status === 'Pending' && (i.leaderNik === myLeaderNik || !i.leaderNik));
+  const pendingLeaves = state.leaves.filter(l => isPending_(l.status) && sameId_(l.leaderNik, myLeaderNik));
+  const pendingHalBaik = state.halBaik.filter(h => isPending_(h.status) && sameId_(h.leaderNik, myLeaderNik));
+  const pendingIdeas = state.ideas.filter(i => isPending_(i.status) && sameId_(i.leaderNik, myLeaderNik));
   initUsers();
   const myTeamUsers = state.allUsers.filter(u => u.leaderNik === myLeaderNik);
   const totalNotif = pendingLeaves.length + pendingHalBaik.length + pendingIdeas.length;
@@ -1965,21 +1988,21 @@ function showLeaderSection(section) {
 function renderLeaderLeavesInto(id) {
   const list = document.getElementById(id); if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.leaves.filter(l => l.status === 'Pending' && (l.leaderNik === myLeaderNik || !l.leaderNik));
+  const pending = state.leaves.filter(l => isPending_(l.status) && sameId_(l.leaderNik, myLeaderNik));
   list.innerHTML = pending.length ? pending.map(l => `<div style="border-bottom:1px solid var(--border);padding:9px 0;"><div style="font-weight:800;font-size:12px;">${l.nama} (${l.brand})</div><div style="font-size:10.5px;color:var(--text-dim);margin:3px 0;">📅 ${l.start} s/d ${l.end} • ${l.ket}</div><div style="display:flex;gap:7px;margin-top:7px;"><button class="btn success" style="padding:7px;font-size:10.5px;" onclick="approveLeave(${l.id},true)">Setujui</button><button class="btn danger" style="padding:7px;font-size:10.5px;" onclick="approveLeave(${l.id},false)">Tolak</button></div></div>`).join('') : '<div class="empty">Tidak ada pengajuan libur yang menunggu review.</div>';
 }
 
 function renderLeaderHalBaikInto(id) {
   const list = document.getElementById(id); if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.halBaik.filter(h => h.status === 'Pending' && (h.leaderNik === myLeaderNik || !h.leaderNik));
+  const pending = state.halBaik.filter(h => isPending_(h.status) && sameId_(h.leaderNik, myLeaderNik));
   list.innerHTML = pending.length ? pending.map(h => `<div style="border-bottom:1px solid var(--border);padding:9px 0;"><div style="font-weight:800;font-size:12px;">${h.nama} — ${h.title}</div><div style="font-size:10.5px;color:var(--text-dim);margin:4px 0;">"${h.essay}"</div><input id="note_${h.id}" placeholder="Catatan apresiasi (opsional)" style="font-size:10.5px;padding:7px 9px;"><div style="display:flex;gap:7px;"><button class="btn success" style="padding:7px;font-size:10.5px;" onclick="approveHalBaik(${h.id},true)">Konfirmasi</button><button class="btn secondary" style="padding:7px;font-size:10.5px;" onclick="approveHalBaik(${h.id},false)">Tidak Disetujui</button></div></div>`).join('') : '<div class="empty">Tidak ada Hal Baik yang menunggu review.</div>';
 }
 
 function renderLeaderIdeasInto(id) {
   const list = document.getElementById(id); if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.ideas.filter(i => i.status === 'Pending' && (i.leaderNik === myLeaderNik || !i.leaderNik));
+  const pending = state.ideas.filter(i => isPending_(i.status) && sameId_(i.leaderNik, myLeaderNik));
   list.innerHTML = pending.length ? pending.map(i => `<div style="border-bottom:1px solid var(--border);padding:9px 0;"><div style="font-weight:800;font-size:12px;">${i.nama} — ${i.title}</div><div style="font-size:10.5px;color:var(--text-dim);margin:4px 0;">"${i.desc}"</div><input id="ideNote_${i.id}" placeholder="Catatan untuk HR (opsional)" style="font-size:10.5px;padding:7px 9px;"><div style="display:flex;gap:7px;"><button class="btn success" style="padding:7px;font-size:10.5px;" onclick="approveLeaderIdea(${i.id},true)">Teruskan ke HR</button><button class="btn secondary" style="padding:7px;font-size:10.5px;" onclick="approveLeaderIdea(${i.id},false)">Tolak</button></div></div>`).join('') : '<div class="empty">Tidak ada ide baru yang menunggu review.</div>';
 }
 
@@ -1993,7 +2016,7 @@ function renderLeaderLeaves() {
   const list = document.getElementById('leaderLeavesList');
   if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.leaves.filter(l => l.status === 'Pending' && (l.leaderNik === myLeaderNik || !l.leaderNik));
+  const pending = state.leaves.filter(l => isPending_(l.status) && sameId_(l.leaderNik, myLeaderNik));
 
   if (!pending.length) {
     list.innerHTML = '<div class="empty">Tidak ada pengajuan libur dari tim Anda yang menunggu persetujuan.</div>';
@@ -2028,7 +2051,7 @@ function renderLeaderHalBaik() {
   const list = document.getElementById('leaderHalBaikList');
   if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.halBaik.filter(h => h.status === 'Pending' && (h.leaderNik === myLeaderNik || !h.leaderNik));
+  const pending = state.halBaik.filter(h => isPending_(h.status) && sameId_(h.leaderNik, myLeaderNik));
 
   if (!pending.length) {
     list.innerHTML = '<div class="empty">Tidak ada catatan Hal Baik dari tim Anda yang perlu dikonfirmasi.</div>';
@@ -2069,7 +2092,7 @@ function renderLeaderIdeas() {
   const list = document.getElementById('leaderIdeasList');
   if (!list) return;
   const myLeaderNik = state.activeProfile.nik;
-  const pending = state.ideas.filter(i => i.status === 'Pending' && (i.leaderNik === myLeaderNik || !i.leaderNik));
+  const pending = state.ideas.filter(i => isPending_(i.status) && sameId_(i.leaderNik, myLeaderNik));
 
   if (!pending.length) {
     list.innerHTML = '<div class="empty">Tidak ada usulan ide baru dari tim Anda yang perlu ditinjau.</div>';
@@ -2852,7 +2875,7 @@ function renderAgendaList(){
 }
 
 function renderLeaderDashboard(){
-  v4EnsureStores();initUsers();const c=document.getElementById('content'),nik=state.activeProfile.nik,team=state.allUsers.filter(u=>u.leaderNik===nik),leaves=state.leaves.filter(l=>l.status==='Pending'&&(l.leaderNik===nik||!l.leaderNik)),goods=state.halBaik.filter(h=>h.status==='Pending'&&(h.leaderNik===nik||!h.leaderNik)),ideas=state.ideas.filter(i=>i.status==='Pending'&&(i.leaderNik===nik||!i.leaderNik)),pending=leaves.length+goods.length+ideas.length;
+  v4EnsureStores();initUsers();const c=document.getElementById('content'),nik=state.activeProfile.nik,team=state.allUsers.filter(u=>u.leaderNik===nik),leaves=state.leaves.filter(l=>isPending_(l.status)&&sameId_(l.leaderNik,nik)),goods=state.halBaik.filter(h=>isPending_(h.status)&&sameId_(h.leaderNik,nik)),ideas=state.ideas.filter(i=>isPending_(i.status)&&sameId_(i.leaderNik,nik)),pending=leaves.length+goods.length+ideas.length;
   const month=new Date().toISOString().slice(0,7),reported=state.monthlyReports.some(r=>r.leaderNik===nik&&r.month===month);
   c.innerHTML=`<div class="home-hero"><div class="eyebrow">Beranda Leader</div><div class="title">Pusat Kendali Tim</div><div class="desc">Persetujuan anggota, performa, catatan perbaikan, dan laporan bulanan HR terpusat di sini.</div><div class="home-summary"><div class="mini-stat"><div class="value">${team.length}</div><div class="label">Anggota</div></div><div class="mini-stat"><div class="value">${pending}</div><div class="label">Perlu Review</div></div><div class="mini-stat"><div class="value">${reported?'✓':'!'}</div><div class="label">Laporan Bulan Ini</div></div></div></div>
   ${pending?`<div class="notice-strip"><span>🔔</span><span>${pending} item anggota membutuhkan tindakan Anda.</span><span class="count">${pending}</span></div>`:''}
@@ -3077,7 +3100,7 @@ function renderLeaderPerformancePage(){
 }
 
 function renderLeaderDashboard(){
-  v4EnsureStores();initUsers();const c=document.getElementById('content'),nik=state.activeProfile.nik,team=state.allUsers.filter(u=>u.leaderNik===nik),leaves=state.leaves.filter(l=>l.status==='Pending'&&(l.leaderNik===nik||!l.leaderNik)),goods=state.halBaik.filter(h=>h.status==='Pending'&&(h.leaderNik===nik||!h.leaderNik)),ideas=state.ideas.filter(i=>i.status==='Pending'&&(i.leaderNik===nik||!i.leaderNik)),pending=leaves.length+goods.length+ideas.length,sla=v6LeaderSlaStats(nik),k=v6Kpi(nik);const month=v6LocalIso().slice(0,7),reported=state.monthlyReports.some(r=>r.leaderNik===nik&&r.month===month);
+  v4EnsureStores();initUsers();const c=document.getElementById('content'),nik=state.activeProfile.nik,team=state.allUsers.filter(u=>u.leaderNik===nik),leaves=state.leaves.filter(l=>isPending_(l.status)&&sameId_(l.leaderNik,nik)),goods=state.halBaik.filter(h=>isPending_(h.status)&&sameId_(h.leaderNik,nik)),ideas=state.ideas.filter(i=>isPending_(i.status)&&sameId_(i.leaderNik,nik)),pending=leaves.length+goods.length+ideas.length,sla=v6LeaderSlaStats(nik),k=v6Kpi(nik);const month=v6LocalIso().slice(0,7),reported=state.monthlyReports.some(r=>r.leaderNik===nik&&r.month===month);
   c.innerHTML=`<div class="home-hero"><div class="eyebrow">Beranda Leader</div><div class="title">Pusat Kendali Tim</div><div class="desc">Persetujuan, SLA respons, performa tim, coaching dan laporan bulanan menjadi KPI Leader.</div><div class="home-summary"><div class="mini-stat"><div class="value">${k.score}</div><div class="label">Skor Leader</div></div><div class="mini-stat"><div class="value">${sla.score}%</div><div class="label">SLA Respons</div></div><div class="mini-stat"><div class="value">${pending}</div><div class="label">Perlu Review</div></div></div></div><div class="notice-strip"><span>⏱️</span><span>SLA: ${sla.within}/${sla.reviewed} review ≤24 jam • rata-rata ${sla.avgHours} jam • ${sla.pending} pending</span></div>${pending?`<div class="notice-strip"><span>🔔</span><span>${pending} item anggota membutuhkan tindakan Anda.</span><span class="count">${pending}</span></div>`:''}<div class="home-section-title">Manajemen Anggota</div><div class="home-grid"><button class="home-tile" onclick="showLeaderSection('leaves')"><div class="icon">🏖️</div><div class="title">Persetujuan Libur</div><div class="desc">Review pengajuan anggota.</div>${leaves.length?`<span class="notify">${leaves.length}</span>`:''}</button><button class="home-tile" onclick="showLeaderSection('halbaik')"><div class="icon">🌱</div><div class="title">Kontribusi Tim</div><div class="desc">Validasi kontribusi positif.</div>${goods.length?`<span class="notify">${goods.length}</span>`:''}</button><button class="home-tile" onclick="showLeaderSection('ideas')"><div class="icon">💡</div><div class="title">Ide Anggota</div><div class="desc">Review sebelum ke HR.</div>${ideas.length?`<span class="notify">${ideas.length}</span>`:''}</button><button class="home-tile" onclick="renderLeaderPerformancePage()"><div class="icon">📊</div><div class="title">Detail Performa</div><div class="desc">Skor dan penyebabnya.</div></button><button class="home-tile" onclick="renderLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Perbaikan</div><div class="desc">Coaching & teruskan ke HR.</div></button><button class="home-tile" onclick="renderMonthlyReportPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">KPI Leader: ${reported?'sudah':'belum'} dikirim.</div></button></div>`;
 }
 
