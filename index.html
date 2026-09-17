@@ -484,7 +484,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyk9KWyRF-PKTvyBPfieytPcGcSAMIjXmK9JV7tJcBJKGCyKzFT3k5EYbo3Bn7QmoSF/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzXAF3PXTRAMOw8TENQ0chNHcPIL0hEeqphAjweuZyuf3bEDzYsUv6U5DCmIfE3Z3F-/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -594,7 +594,7 @@ function mapBootstrapToCaches(bs) {
 
   // Announcements
   if (Array.isArray(bs.announcements)) {
-    const mapped = bs.announcements.map(a => ({ id: a.id, date: a.date, text: a.text, expiresAt: a.expires_at || null }));
+    const mapped = bs.announcements.map(a => ({ id: a.id, date: a.date, text: a.text, startsAt: a.starts_at || a.created_at || null, expiresAt: a.expires_at || null, createdBy: idText_(a.created_by), updatedAt:a.updated_at||null, updatedBy:idText_(a.updated_by) }));
     localStorage.setItem('announcements_all', JSON.stringify(mapped));
   }
 
@@ -3399,6 +3399,103 @@ renderHRDashboard=function(){
   v6ReconcileAllUsers();v4EnsureStores();initUsers();v9EnsureHrReminderStore();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,unreadNotes=v8UnreadLeaderNotes().length,unreadReports=v9UnreadMonthlyReports().length,hrAgendaCount=v9HrAgendaBadgeCount(),k=v6Kpi(state.activeProfile.nik);const avgSla=leaders.length?Math.round(leaders.reduce((s,l)=>s+v6LeaderSlaStats(l.nik).score,0)/leaders.length):100;
   c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${v9Esc(state.activeProfile.nama)}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div>${hrAgendaCount?`<div class="hr-agenda-notice" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)" style="cursor:pointer"><span>🔔</span><span>${hrAgendaCount} pengingat Agenda HR aktif.</span><span class="count">${hrAgendaCount}</span></div>`:''}<div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${unreadReports?`<span class="notify">${unreadReports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, perusahaan, broadcast, kegiatan & pesan pribadi.</div>${hrAgendaCount?`<span class="notify">${hrAgendaCount}</span>`:''}</button></div>`;
 };
+</script>
+
+
+<script>
+/* =========================================================
+   V10.1 — DEVELOPMENT WITHOUT CHANGING V10 ESSENCE
+   Broadcast CRUD + schedule, attendance reliability/speed,
+   HR team-agenda monitor, Leader leave shortcut, relation fixes.
+   ========================================================= */
+function v101Esc(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function v101LocalDateTimeValue(d){
+  const x=d?new Date(d):new Date(); if(isNaN(x))return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+}
+function v101IsoFromLocal(v){return v?new Date(v).toISOString():'';}
+
+// Broadcast aktif hanya di antara startsAt dan expiresAt.
+renderBroadcastBanner=function(){
+  const b=document.getElementById('broadcastBanner'),txt=document.getElementById('broadcastText');if(!b||!txt)return;
+  const now=Date.now();
+  const valid=(state.announcements||[]).filter(a=>{
+    const st=a.startsAt?new Date(a.startsAt).getTime():0, en=a.expiresAt?new Date(a.expiresAt).getTime():Infinity;
+    return (!st||st<=now)&&(!en||now<en);
+  }).sort((a,b)=>String(b.startsAt||b.date||'').localeCompare(String(a.startsAt||a.date||'')));
+  if(valid.length){b.style.display='flex';txt.textContent=valid[0].text;}else b.style.display='none';
+};
+
+function v101RenderBroadcastManager(){
+  const c=document.getElementById('agendaSubTabContent');if(!c)return;
+  const now=new Date(), defaultEnd=new Date(now.getTime()+3*86400000);
+  const items=[...(state.announcements||[])].sort((a,b)=>String(b.startsAt||b.date||'').localeCompare(String(a.startsAt||a.date||'')));
+  c.innerHTML=`<div class="card"><div style="font-weight:800;font-size:13px;margin-bottom:10px">📢 Broadcast Pengumuman</div>
+    <label>Pesan Pengumuman</label><textarea id="bcText" rows="3" placeholder="Tuliskan pesan broadcast..."></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label>Mulai Tayang</label><input type="datetime-local" id="bcStart" value="${v101LocalDateTimeValue(now)}"></div><div><label>Selesai Tayang</label><input type="datetime-local" id="bcEnd" value="${v101LocalDateTimeValue(defaultEnd)}"></div></div>
+    <button class="btn" onclick="v101CreateBroadcast()">🚀 Publish Broadcast</button></div>
+    <h2 class="section-title">Broadcast Terpublikasi</h2>
+    ${items.length?items.map(a=>{const t=Date.now(),st=a.startsAt?new Date(a.startsAt).getTime():0,en=a.expiresAt?new Date(a.expiresAt).getTime():Infinity;const status=t<st?'Terjadwal':t>=en?'Selesai':'Tayang';return `<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px"><strong style="font-size:12px">${v101Esc(a.text)}</strong><span class="role-badge">${status}</span></div><div style="font-size:9.5px;color:#64748b;margin:7px 0">Mulai: ${v101Esc(a.startsAt?new Date(a.startsAt).toLocaleString('id-ID'):'Sekarang')}<br>Selesai: ${v101Esc(a.expiresAt?new Date(a.expiresAt).toLocaleString('id-ID'):'Tanpa batas')}</div><div style="display:flex;gap:7px"><button class="btn secondary" style="margin:0;padding:8px" onclick="v101EditBroadcast('${a.id}')">✏️ Koreksi</button><button class="btn danger" style="margin:0;padding:8px" onclick="v101DeleteBroadcast('${a.id}')">🗑️ Hapus</button></div></div>`}).join(''):'<div class="empty">Belum ada broadcast.</div>'}`;
+}
+async function v101CreateBroadcast(){
+  const text=document.getElementById('bcText').value.trim(),start=document.getElementById('bcStart').value,end=document.getElementById('bcEnd').value;
+  if(!text||!start||!end){showToast('⚠️ Pesan, waktu mulai dan selesai wajib diisi.');return;}if(new Date(end)<=new Date(start)){showToast('⚠️ Waktu selesai harus setelah waktu mulai.');return;}
+  const res=await gasCall('addAnnouncement',{text,startsAt:v101IsoFromLocal(start),expiresAt:v101IsoFromLocal(end)});if(!res.ok){showToast('⛔ '+(res.message||res.error));return;}
+  await syncFromServer();loadUserData();renderBroadcastBanner();v101RenderBroadcastManager();showToast('🚀 Broadcast berhasil dipublikasikan.');
+}
+function v101EditBroadcast(id){
+  const a=(state.announcements||[]).find(x=>String(x.id)===String(id));if(!a)return;
+  const c=document.getElementById('agendaSubTabContent');
+  c.innerHTML=`<div class="v4-section-head"><strong>✏️ Koreksi Broadcast</strong><button class="v4-back" onclick="v101RenderBroadcastManager()">← Kembali</button></div><div class="card"><label>Pesan</label><textarea id="bcEditText" rows="4">${v101Esc(a.text)}</textarea><label>Mulai Tayang</label><input type="datetime-local" id="bcEditStart" value="${v101LocalDateTimeValue(a.startsAt)}"><label>Selesai Tayang</label><input type="datetime-local" id="bcEditEnd" value="${v101LocalDateTimeValue(a.expiresAt)}"><button class="btn" onclick="v101SaveBroadcast('${a.id}')">💾 Simpan Koreksi</button></div>`;
+}
+async function v101SaveBroadcast(id){const text=document.getElementById('bcEditText').value.trim(),st=document.getElementById('bcEditStart').value,en=document.getElementById('bcEditEnd').value;if(!text||!st||!en||new Date(en)<=new Date(st)){showToast('⚠️ Periksa pesan dan rentang waktu.');return;}const r=await gasCall('updateAnnouncement',{id,text,startsAt:v101IsoFromLocal(st),expiresAt:v101IsoFromLocal(en)});if(!r.ok){showToast('⛔ '+(r.message||r.error));return;}await syncFromServer();loadUserData();renderBroadcastBanner();v101RenderBroadcastManager();showToast('✅ Broadcast diperbarui.');}
+async function v101DeleteBroadcast(id){if(!confirm('Hapus broadcast ini? Tindakan ini tidak dapat dibatalkan.'))return;const r=await gasCall('deleteAnnouncement',{id});if(!r.ok){showToast('⛔ '+(r.message||r.error));return;}await syncFromServer();loadUserData();renderBroadcastBanner();v101RenderBroadcastManager();showToast('🗑️ Broadcast dihapus.');}
+
+// Bungkus renderer Agenda final V9: broadcast memakai manager V10.1 dan HR melihat Agenda Tim sebagai monitoring saja.
+const v101BaseAgendaSub=renderAgendaSubTabContent;
+renderAgendaSubTabContent=function(){
+  if(state.activeProfile.role==='hr'&&state.agendaSubTab==='broadcast'){v101RenderBroadcastManager();return;}
+  v101BaseAgendaSub();
+  if(state.activeProfile.role==='hr'&&state.agendaSubTab==='agenda'){
+    const c=document.getElementById('agendaSubTabContent');if(!c)return;
+    const team=(state.agendas||[]).filter(a=>a.scope==='team').sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const box=document.createElement('div');box.innerHTML=`<h2 class="section-title">Agenda Tim Leader — Monitoring HR</h2>${team.length?team.map(a=>{const leader=(state.allUsers||[]).find(u=>sameId_(u.nik,a.teamLeaderNik));return `<div class="team-agenda-card"><span class="tag">MONITORING • TANPA KONFIRMASI HR</span><div style="font-size:12px;font-weight:800">${v101Esc(a.title)}</div><div style="font-size:10px;color:#64748b;margin-top:4px">Leader: ${v101Esc(leader?.nama||a.teamLeaderNik||'-')} • 📅 ${v101Esc(a.date)} • ⏰ ${v101Esc(a.time)} • 📍 ${v101Esc(a.location)}</div></div>`}).join(''):'<div class="empty">Belum ada agenda tim dari Leader.</div>'}`;c.prepend(box);
+  }
+};
+
+// Leader juga dapat mengajukan libur miliknya sendiri dari Beranda tanpa mengubah menu persetujuan tim.
+const v101BaseLeaderDashboard=renderLeaderDashboard;
+renderLeaderDashboard=function(){
+  v101BaseLeaderDashboard();const c=document.getElementById('content');if(!c)return;
+  const grid=c.querySelector('.home-grid');if(grid&&!grid.querySelector('[data-v101-leave]')){const pending=(state.leaves||[]).filter(l=>sameId_(l.nik,state.activeProfile.nik)&&isPending_(l.status)).length;const b=document.createElement('button');b.className='home-tile';b.dataset.v101Leave='1';b.onclick=()=>switchTab('libur',true);b.innerHTML=`<div class="icon">📅</div><div class="title">Pengajuan Libur Saya</div><div class="desc">Ajukan dan pantau libur pribadi Leader.</div>${pending?`<span class="notify">${pending}</span>`:''}`;grid.appendChild(b);}
+};
+
+// GPS: simpan accuracy. Jangan menolak di browser berdasarkan angka jarak cache; server melakukan validasi final.
+initLocationWatcher=function(){
+  if(!('geolocation' in navigator))return;
+  navigator.geolocation.watchPosition(pos=>{state.coords.lat=pos.coords.latitude;state.coords.lng=pos.coords.longitude;state.coords.accuracy=pos.coords.accuracy||0;state.distanceToOffice=getDistanceInMeters(state.coords.lat,state.coords.lng,OFFICE_COORDS.lat,OFFICE_COORDS.lng);updateLocationBadgeUI();},()=>{state.distanceToOffice=null;state.coords.accuracy=0;updateLocationBadgeUI();},{enableHighAccuracy:true,timeout:8000,maximumAge:3000});
+};
+
+capturePhotoDataUrl_=function(){
+  const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');if(!video||!canvas||!video.videoWidth)return null;
+  const MAX_DIM=280,ratio=Math.min(1,MAX_DIM/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);try{return canvas.toDataURL('image/jpeg',0.36);}catch(_){return null;}
+};
+
+capturePhotoAndAbsen=async function(){
+  const isHr=state.activeProfile.role==='hr';if(isHr&&isHRNonWorkingDay()){showToast('🏖️ Hari libur HR tidak memengaruhi XP atau KPI.');return;}if(isHr)state.selectedShift='pagi';
+  if(state.selectedShift!=='malam'&&(state.coords.lat==null||state.coords.lng==null)){showToast('⚠️ GPS belum siap. Tunggu lokasi terbaca.');return;}
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});const dup=(state.records||[]).find(r=>String(r.date)===today&&String(r.type)===String(state.selectedType));if(dup){showToast(`⛔ Anda sudah absen ${state.selectedType} hari ini pukul ${dup.time}.`);return;}
+  const photo=capturePhotoDataUrl_();if(!photo){showToast('⚠️ Kamera belum siap. Coba kembali.');return;}
+  const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Menyimpan presensi…';}
+  const res=await gasCall('addAttendance',{id:'ATT-'+Date.now(),shift:isHr?'pagi':state.selectedShift,type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,accuracy:state.coords.accuracy||0,photoBase64:photo});
+  if(!res.ok){showToast('⛔ '+(res.message||res.error||'Presensi gagal.'));if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}return;}
+  const r=res.record;state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));state.records.unshift({id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:r.lat,lng:r.lng,xpEarned:num_(r.xp_earned),role:r.role,photoUrl:r.photo_url});localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));updateGamifyBar();stopCamera();fireConfetti();const st=attendanceStatusStyle_(r.status_text);showToast(`✅ Presensi tersimpan • ${r.status_text}`);const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px;background:${st.bg};border-color:${st.color}"><div style="font-size:32px">✅</div><div style="font-size:15px;font-weight:800;color:${st.color}">Presensi ${r.type.toUpperCase()} Berhasil</div><div style="font-size:11px;color:var(--text-dim);margin-top:5px">${r.date} • ${r.time} • ${r.distance_m}m • <strong>${v101Esc(r.status_text)}</strong></div><div style="font-size:9.5px;color:#64748b;margin-top:5px">Foto tersimpan di Google Drive dan URL tercatat di Spreadsheet.</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+};
+
+// Tampilan status baru briefing.
+const v101OldStatusStyle=attendanceStatusStyle_;
+attendanceStatusStyle_=function(s){if(s==='Terlambat Briefing')return {color:'var(--status-warning)',bg:'var(--status-warning-bg)',emoji:'🟡'};return v101OldStatusStyle(s);};
 </script>
 
 </body>
