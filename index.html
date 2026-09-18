@@ -521,6 +521,20 @@ function isPending_(v) { return statusText_(v) === 'pending'; }
 function sameId_(a,b) { return idText_(a) !== '' && idText_(a) === idText_(b); }
 
 function mapBootstrapToCaches(bs) {
+  // V10.1.1: konfigurasi lokasi kantor berasal dari backend/Spreadsheet Settings.
+  if (Array.isArray(bs.settings)) {
+    const sm = {}; bs.settings.forEach(x => sm[String(x.key || '').trim()] = x.value);
+    const lat = Number(String(sm.office_lat ?? '').replace(',', '.'));
+    const lng = Number(String(sm.office_lng ?? '').replace(',', '.'));
+    const maxDistance = Number(String(sm.max_distance_m ?? '300').replace(',', '.'));
+    if (Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180) {
+      state.officeConfig = { lat, lng, maxDistance: Number.isFinite(maxDistance) && maxDistance > 0 ? maxDistance : 300 };
+      if (state.coords.lat != null && state.coords.lng != null) {
+        state.distanceToOffice = getDistanceInMeters(state.coords.lat, state.coords.lng, lat, lng);
+        updateLocationBadgeUI();
+      }
+    }
+  }
   // Users dari bootstrap adalah snapshot resmi sesuai role. Jangan merge dengan cache lama,
   // karena akun/relasi leader lama dapat membuat badge notifikasi sempat muncul lalu hilang.
   if (Array.isArray(bs.users)) {
@@ -680,7 +694,7 @@ async function syncFromServer() {
 }
 
 const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
-const MAX_DISTANCE_METERS = 300;
+const MAX_DISTANCE_METERS_FALLBACK = 300;
 
 const SHIFTS = {
   pagi:   { label: 'Pagi',   start: '07:00', end: '15:00', briefing: '06:45' },
@@ -716,6 +730,7 @@ let state = {
   selectedType: 'masuk',
   coords: { lat: null, lng: null },
   distanceToOffice: null,
+  officeConfig: { lat: -6.943844191925493, lng: 107.626902331005, maxDistance: 300 },
   stream: null,
   currentTab: 'home',
   agendaSubTab: 'kegiatan',
@@ -757,7 +772,7 @@ function updateLocationBadgeUI() {
   } else if (state.distanceToOffice === null) {
     badge.className = 'location-badge invalid';
     badge.innerHTML = `<span>📍</span> GPS Mencari Lokasi... (Harap Izinkan GPS)`;
-  } else if (state.distanceToOffice <= MAX_DISTANCE_METERS) {
+  } else if (state.distanceToOffice <= (state.officeConfig?.maxDistance || 300)) {
     badge.className = 'location-badge valid';
     badge.innerHTML = `<span>🟢</span> Lokasi Valid: <strong>${state.distanceToOffice}m</strong> dari kantor`;
   } else {
@@ -1075,43 +1090,15 @@ function renderProfilTab() {
 }
 
 async function updateUserPassword() {
-  const oldPass = document.getElementById('oldPassInput')?.value.trim() || '';
-  const newPass = document.getElementById('newPassInput')?.value.trim() || '';
-  if (!oldPass || !newPass) { showToast('⚠️ Password lama dan baru wajib diisi.'); return; }
-  if (newPass.length !== 2) { showToast('⚠️ Password baru harus 2 karakter.'); return; }
-
-  const oldEl=document.getElementById('oldPassInput'); const newEl=document.getElementById('newPassInput');
-
-  if (GAS_URL) {
-    // Verifikasi password lama ke server (via login), lalu simpan password baru ke server.
-    const verify = await gasCall('login', { kodeUnik: state.activeProfile.kodeUnik, passCode: oldPass });
-    if (!verify.ok) { showToast('❌ ' + (verify.error || 'Password lama tidak cocok.')); return; }
-    const save = await gasCall('saveUser', { ...verify.user, passCode: newPass, actorNik: state.activeProfile.nik });
-    if (!save.ok) { showToast('❌ Gagal menyimpan password baru ke server: ' + (save.error || 'unknown error')); return; }
-
-    state.activeProfile.passCode = newPass;
-    sessionStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
-    initUsers();
-    const idx = state.allUsers.findIndex(u => u.nik === state.activeProfile.nik);
-    if (idx >= 0) { state.allUsers[idx] = { ...state.allUsers[idx], passCode: newPass }; localStorage.setItem('registered_users', JSON.stringify(state.allUsers)); }
-
-    showToast('✅ Password berhasil diubah di server — berlaku di semua perangkat.');
-    if(oldEl) oldEl.value=''; if(newEl) newEl.value='';
-    return;
-  }
-
-  // Fallback: mode lokal saja (GAS_URL belum diisi).
-  initUsers();
-  const idx = state.allUsers.findIndex(u => u.nik === state.activeProfile.nik);
-  if (idx < 0) { showToast('❌ Akun tidak ditemukan.'); return; }
-  if (String(state.allUsers[idx].passCode || '') !== String(oldPass)) { showToast('❌ Password lama tidak cocok.'); return; }
-
-  state.allUsers[idx].passCode = newPass;
-  state.activeProfile.passCode = newPass;
-  localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
-  sessionStorage.setItem('active_user_session', JSON.stringify(state.activeProfile));
-  showToast('✅ Password berhasil diubah. (Catatan: GAS_URL belum diisi, perubahan ini baru berlaku di perangkat ini saja.)');
-  if(oldEl) oldEl.value=''; if(newEl) newEl.value='';
+  const oldPass=document.getElementById('oldPassInput')?.value.trim()||'';
+  const newPass=document.getElementById('newPassInput')?.value.trim()||'';
+  if(!oldPass||!newPass){showToast('⚠️ Password lama dan baru wajib diisi.');return;}
+  if(newPass.length!==2){showToast('⚠️ Password baru harus 2 karakter.');return;}
+  const res=await gasCall('changeOwnPassword',{oldPass,newPass});
+  if(!res.ok){showToast('❌ '+(res.message||res.error||'Gagal mengganti password.'));return;}
+  document.getElementById('oldPassInput').value='';
+  document.getElementById('newPassInput').value='';
+  showToast('✅ Password berhasil diubah. Silakan gunakan password baru pada login berikutnya.');
 }
 
 function handleAvatarUpload(event) {
@@ -1232,7 +1219,7 @@ function capturePhotoAndAbsen() {
       showToast('⚠️ Gagal membaca GPS! Pastikan izin lokasi aktif.');
       return;
     }
-    if (state.distanceToOffice > MAX_DISTANCE_METERS) {
+    if (state.distanceToOffice > (state.officeConfig?.maxDistance || 300)) {
       showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 300 meter.`);
       return;
     }
@@ -2748,7 +2735,7 @@ async function capturePhotoAndAbsen(){
   if(isHr)state.selectedShift='pagi';
   if(state.selectedShift!=='malam'){
     if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
-    if(state.distanceToOffice>MAX_DISTANCE_METERS){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 300m.`);return;}
+    if(state.distanceToOffice>(state.officeConfig?.maxDistance || 300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 300m.`);return;}
   }
   const capturedPhoto=capturePhotoDataUrl_();
   if(!capturedPhoto){showToast('⚠️ Foto wajib diambil. Pastikan kamera aktif.');return;}
@@ -3474,7 +3461,7 @@ renderLeaderDashboard=function(){
 // GPS: simpan accuracy. Jangan menolak di browser berdasarkan angka jarak cache; server melakukan validasi final.
 initLocationWatcher=function(){
   if(!('geolocation' in navigator))return;
-  navigator.geolocation.watchPosition(pos=>{state.coords.lat=pos.coords.latitude;state.coords.lng=pos.coords.longitude;state.coords.accuracy=pos.coords.accuracy||0;state.distanceToOffice=getDistanceInMeters(state.coords.lat,state.coords.lng,OFFICE_COORDS.lat,OFFICE_COORDS.lng);updateLocationBadgeUI();},()=>{state.distanceToOffice=null;state.coords.accuracy=0;updateLocationBadgeUI();},{enableHighAccuracy:true,timeout:8000,maximumAge:3000});
+  navigator.geolocation.watchPosition(pos=>{state.coords.lat=pos.coords.latitude;state.coords.lng=pos.coords.longitude;state.coords.accuracy=pos.coords.accuracy||0;const oc=state.officeConfig||OFFICE_COORDS;state.distanceToOffice=getDistanceInMeters(state.coords.lat,state.coords.lng,oc.lat,oc.lng);updateLocationBadgeUI();},()=>{state.distanceToOffice=null;state.coords.accuracy=0;updateLocationBadgeUI();},{enableHighAccuracy:true,timeout:8000,maximumAge:3000});
 };
 
 capturePhotoDataUrl_=function(){
@@ -3489,13 +3476,144 @@ capturePhotoAndAbsen=async function(){
   const photo=capturePhotoDataUrl_();if(!photo){showToast('⚠️ Kamera belum siap. Coba kembali.');return;}
   const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Menyimpan presensi…';}
   const res=await gasCall('addAttendance',{id:'ATT-'+Date.now(),shift:isHr?'pagi':state.selectedShift,type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,accuracy:state.coords.accuracy||0,photoBase64:photo});
-  if(!res.ok){showToast('⛔ '+(res.message||res.error||'Presensi gagal.'));if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}return;}
+  if(!res.ok){if(res.locationDebug)console.warn('Diagnosis lokasi presensi:',res.locationDebug);showToast('⛔ '+(res.message||res.error||'Presensi gagal.'));if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}return;}
+  if(res.officeConfig) state.officeConfig={...state.officeConfig,...res.officeConfig};
   const r=res.record;state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));state.records.unshift({id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:r.lat,lng:r.lng,xpEarned:num_(r.xp_earned),role:r.role,photoUrl:r.photo_url});localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));updateGamifyBar();stopCamera();fireConfetti();const st=attendanceStatusStyle_(r.status_text);showToast(`✅ Presensi tersimpan • ${r.status_text}`);const slot=document.getElementById('cameraSlot');if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:18px 10px;background:${st.bg};border-color:${st.color}"><div style="font-size:32px">✅</div><div style="font-size:15px;font-weight:800;color:${st.color}">Presensi ${r.type.toUpperCase()} Berhasil</div><div style="font-size:11px;color:var(--text-dim);margin-top:5px">${r.date} • ${r.time} • ${r.distance_m}m • <strong>${v101Esc(r.status_text)}</strong></div><div style="font-size:9.5px;color:#64748b;margin-top:5px">Foto tersimpan di Google Drive dan URL tercatat di Spreadsheet.</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
 };
 
 // Tampilan status baru briefing.
 const v101OldStatusStyle=attendanceStatusStyle_;
 attendanceStatusStyle_=function(s){if(s==='Terlambat Briefing')return {color:'var(--status-warning)',bg:'var(--status-warning-bg)',emoji:'🟡'};return v101OldStatusStyle(s);};
+</script>
+
+
+<style id="v102Styles">
+#camVideo{transform:none!important}
+.v102-camera-tools{display:flex;gap:8px;margin:8px 0 10px}
+.v102-camera-tools button{flex:1;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:9px;font-size:11px;font-weight:800}
+.v102-tree details{border:1px solid #e2e8f0;border-radius:14px;margin:8px 0;background:#fff;overflow:hidden}
+.v102-tree summary{cursor:pointer;padding:12px 14px;font-weight:800;font-size:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px}
+.v102-tree .body{padding:10px 12px}
+.v102-person{border:1px solid #eef2f7;border-radius:12px;padding:10px;margin:7px 0;cursor:pointer}
+.v102-person:hover{background:#f8fafc}
+.v102-back{border:0;background:transparent;color:#2563eb;font-weight:800;font-size:11px;cursor:pointer}
+.v102-leave{border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:10px;margin:8px 0}
+</style>
+<script>
+/* V10.2 Stable — reliability + requested UX. Existing content/KPI/XP remains intact. */
+state.cameraFacing=state.cameraFacing||'user';
+
+startCamera=async function(){
+  stopCamera();
+  const video=document.getElementById('camVideo'); if(!video)return;
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:state.cameraFacing},width:{ideal:1280},height:{ideal:720}},audio:false
+    });
+    state.stream=stream; video.srcObject=stream; video.style.transform='none';
+    v102CameraTools();
+  }catch(err){console.warn('Camera blocked/unavailable:',err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
+};
+function v102CameraTools(){
+  const slot=document.getElementById('cameraSlot'); if(!slot||slot.querySelector('.v102-camera-tools'))return;
+  const tools=document.createElement('div');tools.className='v102-camera-tools';
+  tools.innerHTML=`<button onclick="v102SetCamera('user')">🤳 Kamera Depan</button><button onclick="v102SetCamera('environment')">📷 Kamera Belakang</button>`;
+  const btn=document.getElementById('btnCapture'); slot.insertBefore(tools,btn);
+}
+function v102SetCamera(f){state.cameraFacing=f;startCamera();}
+/* Hasil canvas sengaja tidak dibalik: foto depan tersimpan sesuai orientasi nyata, bukan mirror. */
+capturePhotoDataUrl_=function(){
+  const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');if(!video||!canvas||!video.videoWidth)return null;
+  const MAX_DIM=320,ratio=Math.min(1,MAX_DIM/Math.max(video.videoWidth,video.videoHeight));
+  canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  try{return canvas.toDataURL('image/jpeg',0.38);}catch(_){return null;}
+};
+
+/* Tombol Kembali: simpan tampilan aplikasi sebelumnya, bukan memaksa ke Profil/Beranda. */
+const v102Nav=[];
+function v102RememberView(){
+  const c=document.getElementById('content');
+  if(c && c.innerHTML && !c.querySelector('.auth-card')) v102Nav.push({html:c.innerHTML,tab:state.currentTab});
+  if(v102Nav.length>20)v102Nav.shift();
+}
+function appBack(){
+  const prev=v102Nav.pop();
+  if(prev){stopCamera();state.currentTab=prev.tab;document.getElementById('content').innerHTML=prev.html;renderBottomNav();return;}
+  switchTab('home',false);
+}
+document.addEventListener('click',function(e){
+  const b=e.target.closest('button,.home-tile,.hist-row,.v102-person');
+  if(!b||b.classList.contains('v102-back')||b.closest('.bottomnav')||/appBack\(/.test(b.getAttribute('onclick')||''))return;
+  const oc=b.getAttribute('onclick')||'';
+  if(/render|showHRSection|showLeaderSection|switchTab/.test(oc))v102RememberView();
+},true);
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.v4-back,.link-btn').forEach(b=>{if((b.textContent||'').match(/Kembali|Beranda/))b.setAttribute('onclick','appBack()')});
+});
+const v102Observer=new MutationObserver(()=>{
+  document.querySelectorAll('.v4-back,.link-btn').forEach(b=>{if((b.textContent||'').match(/Kembali|Beranda/))b.setAttribute('onclick','appBack()')});
+  if(document.getElementById('camVideo'))v102CameraTools();
+});
+v102Observer.observe(document.getElementById('content'),{childList:true,subtree:true});
+
+/* HR: pengajuan Leader menunggu konfirmasi HR. */
+function v102LeaderLeaves(){return state.leaves.filter(l=>String(l.status)==='PendingHR');}
+async function v102ReviewLeaderLeave(id,status){
+  const res=await gasCall('reviewLeave',{id,status,note:'Konfirmasi HR'});
+  if(!res.ok){showToast('❌ '+(res.message||res.error));return;}
+  const x=state.leaves.find(l=>String(l.id)===String(id));if(x)x.status=status;
+  showToast(status==='Approved'?'✅ Pengajuan Leader disetujui HR.':'Pengajuan Leader ditolak HR.');
+  renderHRLeaderLeaves();
+}
+function renderHRLeaderLeaves(){
+  const c=document.getElementById('content'),items=v102LeaderLeaves();
+  c.innerHTML=`<div class="v4-section-head"><strong>🏖️ Pengajuan Libur Leader</strong><button class="v102-back" onclick="appBack()">← Kembali</button></div>
+  ${items.length?items.map(l=>`<div class="v102-leave"><strong>${v101Esc(l.nama||l.nik)}</strong><div style="font-size:10px;margin:5px 0">${v101Esc(l.startDate||l.start_date)} s/d ${v101Esc(l.endDate||l.end_date)} • ${v101Esc(l.ket||l.reason||'')}</div><div style="display:flex;gap:7px"><button class="btn" onclick="v102ReviewLeaderLeave('${l.id}','Approved')">Setujui</button><button class="btn secondary" onclick="v102ReviewLeaderLeave('${l.id}','Rejected')">Tolak</button></div></div>`).join(''):'<div class="empty">Tidak ada pengajuan Leader yang menunggu HR.</div>'}`;
+}
+
+/* HR Detail Performa: Detail Performa -> Tim -> Individu, accordion maximize/minimize. */
+function v102PersonPerformance(u){
+  const p=getUserPerformance(u.nik),k=(typeof v6Kpi==='function'?v6Kpi(u.nik):{score:v4KpiScore(u.nik)});
+  const pen=typeof v6PenaltyStats==='function'?v6PenaltyStats(u.nik):{alpha:0};
+  return `<div class="member-card"><div class="member-head"><div><div class="member-name">${v101Esc(u.nama)}</div><div class="member-meta">${v101Esc(u.brand)} • NIK ${v101Esc(u.nik)} • ${roleLabel(u.role)}</div></div><div class="kpi-ring" style="--p:${k.score}"><strong>${k.score}</strong></div></div><div class="metric-row"><div class="metric-box"><strong>${u.xp||0}</strong><span>XP</span></div><div class="metric-box"><strong>${p.discipline}%</strong><span>Disiplin</span></div><div class="metric-box"><strong>${p.total}</strong><span>Presensi</span></div><div class="metric-box"><strong>${p.good}</strong><span>Kontribusi</span></div><div class="metric-box"><strong>${p.ideas}</strong><span>Ide</span></div><div class="metric-box"><strong>${pen.alpha||0}</strong><span>Alpha</span></div></div>${typeof v6KpiBreakdownHtml==='function'?v6KpiBreakdownHtml(u.nik):''}</div>`;
+}
+function renderHRPerformanceV102(){
+  initUsers();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader');
+  const orphan=state.allUsers.filter(u=>u.role==='karyawan'&&!u.leaderNik);
+  c.innerHTML=`<div class="v4-section-head"><strong>📊 Detail Performa</strong><button class="v102-back" onclick="appBack()">← Kembali</button></div><div class="v102-tree">
+  ${leaders.map(l=>{const members=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>Tim ${v101Esc(l.nama)}</span><span>${members.length} anggota ▾</span></summary><div class="body"><details><summary><span>Leader • ${v101Esc(l.nama)}</span><span>KPI</span></summary><div class="body">${v102PersonPerformance(l)}</div></details>${members.map(m=>`<details><summary><span>${v101Esc(m.nama)}</span><span>Individu ▾</span></summary><div class="body">${v102PersonPerformance(m)}</div></details>`).join('')}</div></details>`}).join('')}
+  ${orphan.length?`<details><summary><span>Belum Terhubung Tim</span><span>${orphan.length}</span></summary><div class="body">${orphan.map(m=>`<details><summary>${v101Esc(m.nama)}</summary><div class="body">${v102PersonPerformance(m)}</div></details>`).join('')}</div></details>`:''}</div>`;
+}
+
+/* HR Kelola Pengguna: form create collapsible + daftar Tim -> Individu. */
+function renderHRUserTreeV102(){
+  initUsers();const leaders=state.allUsers.filter(u=>u.role==='leader'),hrs=state.allUsers.filter(u=>u.role==='hr');
+  return `<div class="v102-tree">${leaders.map(l=>{const ms=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>👤 Tim Leader — ${v101Esc(l.nama)}</span><span>${ms.length} anggota ▾</span></summary><div class="body"><div class="v102-person" onclick="hrEditUser('${l.nik}')"><strong>${v101Esc(l.nama)}</strong><div class="muted">Leader • ${v101Esc(l.brand)} • NIK ${v101Esc(l.nik)}</div></div>${ms.map(m=>`<div class="v102-person" onclick="hrEditUser('${m.nik}')"><strong>${v101Esc(m.nama)}</strong><div class="muted">Anggota • ${v101Esc(m.brand)} • NIK ${v101Esc(m.nik)}</div></div>`).join('')}</div></details>`}).join('')}
+  ${hrs.length?`<details><summary><span>HR Admin</span><span>${hrs.length} akun ▾</span></summary><div class="body">${hrs.map(h=>`<div class="v102-person" onclick="hrEditUser('${h.nik}')"><strong>${v101Esc(h.nama)}</strong><div class="muted">${v101Esc(h.brand)} • NIK ${v101Esc(h.nik)}</div></div>`).join('')}</div></details>`:''}</div>`;
+}
+const v102OldHRSub=renderHRSubTabContent;
+renderHRSubTabContent=function(){
+  v102OldHRSub();
+  if(state.hrSubTab!=='kelola')return;
+  const container=document.getElementById('hrSubTabContent');if(!container)return;
+  const create=container.querySelector('.card .card')||container.querySelector('.card');
+  const oldList=document.getElementById('hrUserList');
+  if(create && !create.closest('details')){
+    const d=document.createElement('details');d.className='collapse-card';d.innerHTML='<summary>➕ Buat Akun Pengguna Baru <span>▾</span></summary><div class="collapse-body"></div>';
+    create.parentNode.insertBefore(d,create);d.querySelector('.collapse-body').appendChild(create);
+  }
+  if(oldList){oldList.innerHTML=`<div style="font-weight:800;margin-bottom:8px">Daftar Akun Terdaftar</div>${renderHRUserTreeV102()}`;}
+};
+
+/* Tambahkan pintu masuk baru pada dashboard HR tanpa menghapus menu lama. */
+const v102BaseHRDashboard=renderHRDashboard;
+renderHRDashboard=function(){
+  v102BaseHRDashboard();
+  const grid=document.querySelector('#content .home-grid');if(!grid)return;
+  const perf=document.createElement('button');perf.className='home-tile';perf.onclick=()=>{v102RememberView();renderHRPerformanceV102();};perf.innerHTML='<div class="icon">📊</div><div class="title">Detail Performa</div><div class="desc">Tim → Individu, dapat dibuka/tutup.</div>';grid.insertBefore(perf,grid.children[1]||null);
+  const pending=v102LeaderLeaves().length;if(pending){const leave=document.createElement('button');leave.className='home-tile';leave.onclick=()=>{v102RememberView();renderHRLeaderLeaves();};leave.innerHTML=`<div class="icon">🏖️</div><div class="title">Pengajuan Leader</div><div class="desc">Konfirmasi pengajuan Leader.</div><span class="notify">${pending}</span>`;grid.insertBefore(leave,grid.children[2]||null);}
+};
 </script>
 
 </body>
