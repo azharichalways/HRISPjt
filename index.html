@@ -3500,7 +3500,7 @@ attendanceStatusStyle_=function(s){if(s==='Terlambat Briefing')return {color:'va
 .v102-leave{border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:10px;margin:8px 0}
 </style>
 <script>
-/* V10.2 Stable — reliability + requested UX. Existing content/KPI/XP remains intact. */
+/* V10.2.1 Stable — camera/navigation/messages/UI fixes. Existing content/KPI/XP remains intact. */
 state.cameraFacing=state.cameraFacing||'user';
 
 startCamera=async function(){
@@ -3510,7 +3510,7 @@ startCamera=async function(){
     const stream=await navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:state.cameraFacing},width:{ideal:1280},height:{ideal:720}},audio:false
     });
-    state.stream=stream; video.srcObject=stream; video.style.transform='none';
+    state.stream=stream; video.srcObject=stream; video.style.transform=state.cameraFacing==='user'?'scaleX(-1)':'none';
     v102CameraTools();
   }catch(err){console.warn('Camera blocked/unavailable:',err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
 };
@@ -3526,7 +3526,9 @@ capturePhotoDataUrl_=function(){
   const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');if(!video||!canvas||!video.videoWidth)return null;
   const MAX_DIM=320,ratio=Math.min(1,MAX_DIM/Math.max(video.videoWidth,video.videoHeight));
   canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
-  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(state.cameraFacing==='user'){ctx.translate(canvas.width,0);ctx.scale(-1,1);}
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);ctx.setTransform(1,0,0,1,0,0);
   try{return canvas.toDataURL('image/jpeg',0.38);}catch(_){return null;}
 };
 
@@ -3546,7 +3548,11 @@ document.addEventListener('click',function(e){
   const b=e.target.closest('button,.home-tile,.hist-row,.v102-person');
   if(!b||b.classList.contains('v102-back')||b.closest('.bottomnav')||/appBack\(/.test(b.getAttribute('onclick')||''))return;
   const oc=b.getAttribute('onclick')||'';
-  if(/render|showHRSection|showLeaderSection|switchTab/.test(oc))v102RememberView();
+  // switchTab sudah mengelola browser history sendiri. Halaman detail langsung perlu entry khusus.
+  if(/render|showHRSection|showLeaderSection|hrEditUser/.test(oc) && !/switchTab/.test(oc)){
+    v102RememberView();
+    history.pushState({v102Detail:true},'',location.hash||'#'+(state.currentTab||'home'));
+  }
 },true);
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.v4-back,.link-btn').forEach(b=>{if((b.textContent||'').match(/Kembali|Beranda/))b.setAttribute('onclick','appBack()')});
@@ -3582,14 +3588,14 @@ function renderHRPerformanceV102(){
   initUsers();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader');
   const orphan=state.allUsers.filter(u=>u.role==='karyawan'&&!u.leaderNik);
   c.innerHTML=`<div class="v4-section-head"><strong>📊 Detail Performa</strong><button class="v102-back" onclick="appBack()">← Kembali</button></div><div class="v102-tree">
-  ${leaders.map(l=>{const members=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>Tim ${v101Esc(l.nama)}</span><span>${members.length} anggota ▾</span></summary><div class="body"><details><summary><span>Leader • ${v101Esc(l.nama)}</span><span>KPI</span></summary><div class="body">${v102PersonPerformance(l)}</div></details>${members.map(m=>`<details><summary><span>${v101Esc(m.nama)}</span><span>Individu ▾</span></summary><div class="body">${v102PersonPerformance(m)}</div></details>`).join('')}</div></details>`}).join('')}
+  ${leaders.map(l=>{const members=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>Tim ${v101Esc(l.nama)}</span><span>${members.length} anggota ▾</span></summary><div class="body"><details><summary><span>Leader • ${v101Esc(l.nama)}</span><span>KPI</span></summary><div class="body">${v102PersonPerformance(l)}</div></details>${members.map(m=>`<details><summary><span style="font-weight:400">${v101Esc(m.nama)}</span><span style="font-weight:400">Individu ▾</span></summary><div class="body">${v102PersonPerformance(m).replace('class="member-name"','class="member-name" style="font-weight:400"')}</div></details>`).join('')}</div></details>`}).join('')}
   ${orphan.length?`<details><summary><span>Belum Terhubung Tim</span><span>${orphan.length}</span></summary><div class="body">${orphan.map(m=>`<details><summary>${v101Esc(m.nama)}</summary><div class="body">${v102PersonPerformance(m)}</div></details>`).join('')}</div></details>`:''}</div>`;
 }
 
 /* HR Kelola Pengguna: form create collapsible + daftar Tim -> Individu. */
 function renderHRUserTreeV102(){
   initUsers();const leaders=state.allUsers.filter(u=>u.role==='leader'),hrs=state.allUsers.filter(u=>u.role==='hr');
-  return `<div class="v102-tree">${leaders.map(l=>{const ms=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>👤 Tim Leader — ${v101Esc(l.nama)}</span><span>${ms.length} anggota ▾</span></summary><div class="body"><div class="v102-person" onclick="hrEditUser('${l.nik}')"><strong>${v101Esc(l.nama)}</strong><div class="muted">Leader • ${v101Esc(l.brand)} • NIK ${v101Esc(l.nik)}</div></div>${ms.map(m=>`<div class="v102-person" onclick="hrEditUser('${m.nik}')"><strong>${v101Esc(m.nama)}</strong><div class="muted">Anggota • ${v101Esc(m.brand)} • NIK ${v101Esc(m.nik)}</div></div>`).join('')}</div></details>`}).join('')}
+  return `<div class="v102-tree">${leaders.map(l=>{const ms=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));return `<details><summary><span>👤 Tim Leader — ${v101Esc(l.nama)}</span><span>${ms.length} anggota ▾</span></summary><div class="body"><div class="v102-person" onclick="hrEditUser('${l.nik}')"><strong>${v101Esc(l.nama)}</strong><div class="muted">Leader • ${v101Esc(l.brand)} • NIK ${v101Esc(l.nik)}</div></div>${ms.map(m=>`<div class="v102-person" onclick="hrEditUser('${m.nik}')"><span style="font-weight:400">${v101Esc(m.nama)}</span><div class="muted">Anggota • ${v101Esc(m.brand)} • NIK ${v101Esc(m.nik)}</div></div>`).join('')}</div></details>`}).join('')}
   ${hrs.length?`<details><summary><span>HR Admin</span><span>${hrs.length} akun ▾</span></summary><div class="body">${hrs.map(h=>`<div class="v102-person" onclick="hrEditUser('${h.nik}')"><strong>${v101Esc(h.nama)}</strong><div class="muted">${v101Esc(h.brand)} • NIK ${v101Esc(h.nik)}</div></div>`).join('')}</div></details>`:''}</div>`;
 }
 const v102OldHRSub=renderHRSubTabContent;
@@ -3613,6 +3619,74 @@ renderHRDashboard=function(){
   const grid=document.querySelector('#content .home-grid');if(!grid)return;
   const perf=document.createElement('button');perf.className='home-tile';perf.onclick=()=>{v102RememberView();renderHRPerformanceV102();};perf.innerHTML='<div class="icon">📊</div><div class="title">Detail Performa</div><div class="desc">Tim → Individu, dapat dibuka/tutup.</div>';grid.insertBefore(perf,grid.children[1]||null);
   const pending=v102LeaderLeaves().length;if(pending){const leave=document.createElement('button');leave.className='home-tile';leave.onclick=()=>{v102RememberView();renderHRLeaderLeaves();};leave.innerHTML=`<div class="icon">🏖️</div><div class="title">Pengajuan Leader</div><div class="desc">Konfirmasi pengajuan Leader.</div><span class="notify">${pending}</span>`;grid.insertBefore(leave,grid.children[2]||null);}
+};
+</script>
+
+
+<script id="v1021NavFix">
+window.addEventListener('popstate',function(){
+  if(v102Nav.length){
+    const prev=v102Nav.pop();
+    setTimeout(()=>{stopCamera();state.currentTab=prev.tab;document.getElementById('content').innerHTML=prev.html;renderBottomNav();},0);
+  }
+});
+</script>
+
+
+<script id="v1021MessageFix">
+function v1021RecipientOptions(){
+  initUsers();
+  const leaders=state.allUsers.filter(u=>u.role==='leader');
+  const assigned=new Set();
+  let out=leaders.map(l=>{
+    assigned.add(String(l.nik));
+    const members=state.allUsers.filter(u=>u.role==='karyawan'&&sameId_(u.leaderNik,l.nik));
+    members.forEach(m=>assigned.add(String(m.nik)));
+    return `<optgroup label="Tim ${v101Esc(l.nama)}"><option value="${v101Esc(l.nik)}">⭐ ${v101Esc(l.nama)} — Leader</option>${members.map(m=>`<option value="${v101Esc(m.nik)}">${v101Esc(m.nama)} — Anggota</option>`).join('')}</optgroup>`;
+  }).join('');
+  const other=state.allUsers.filter(u=>u.role!=='hr'&&!assigned.has(String(u.nik)));
+  if(other.length)out+=`<optgroup label="Belum Terhubung Tim">${other.map(u=>`<option value="${v101Esc(u.nik)}">${v101Esc(u.nama)} — ${v101Esc(roleLabel(u.role))}</option>`).join('')}</optgroup>`;
+  return out;
+}
+async function sendHRPrivateMessageV9(){
+  const toNik=document.getElementById('msgToNik')?.value||'',subject=document.getElementById('msgSubject')?.value.trim()||'',text=document.getElementById('msgText')?.value.trim()||'',reminderDate=document.getElementById('msgReminderDate')?.value||'',xpBonus=parseInt(document.getElementById('msgXpBonus')?.value)||10;
+  if(!toNik){showToast('⚠️ Pilih penerima.');return;}
+  if(!text){showToast('⚠️ Isi pesan terlebih dahulu.');return;}
+  const u=state.allUsers.find(x=>sameId_(x.nik,toNik));
+  const msg={id:String(Date.now()),toNik:String(toNik),subject:subject||'Pesan Penting dari HR',text,xpBonus,reminderDate:reminderDate||''};
+  const res=await gasCall('sendPrivateMessage',msg);
+  if(!res.ok){showToast('❌ Pesan gagal dikirim: '+(res.message||res.error||'Server menolak permintaan.'));return;}
+  const item=res.item||{};
+  state.privateMessages.unshift({id:item.id||msg.id,fromNik:String(item.from_nik||state.activeProfile.nik),toNik:String(item.to_nik||toNik),toName:item.to_name||u?.nama||toNik,subject:item.subject||msg.subject,text:item.text||text,xpBonus:Number(item.xp_bonus||xpBonus),date:item.date||new Date().toISOString().slice(0,10),reminderDate:item.reminder_date||reminderDate,readAt:item.read_at||null});
+  localStorage.setItem('private_messages_all',JSON.stringify(state.privateMessages));
+  showToast(`🚨 Pesan berhasil tersimpan di server untuk ${u?.nama||toNik}.`);
+  state.agendaSubTab='messages';renderAgendaTab();
+}
+const v1021AgendaSub=renderAgendaSubTabContent;
+renderAgendaSubTabContent=function(){
+  v1021AgendaSub();
+  if(state.activeProfile?.role==='hr'&&state.agendaSubTab==='messages'){
+    const sel=document.getElementById('msgToNik');if(sel)sel.innerHTML=v1021RecipientOptions();
+  }
+};
+const v1021HRMessages=renderHRMessagesPage;
+renderHRMessagesPage=function(){
+  v1021HRMessages();
+  const sel=document.getElementById('msgToNik');if(sel)sel.innerHTML=v1021RecipientOptions();
+};
+const v1021LeaderDashboard=renderLeaderDashboard;
+renderLeaderDashboard=function(){
+  v1021LeaderDashboard();
+  const unread=getUnreadHRMessages(state.activeProfile.nik);
+  if(unread.length){
+    const hero=document.querySelector('#content .home-hero');
+    if(hero){
+      const n=document.createElement('div');n.className='important-notice';n.style.cursor='pointer';
+      n.onclick=()=>{v102RememberView();history.pushState({v102Detail:true},'',location.hash||'#home');renderInboxPage();};
+      n.innerHTML=`<div>🚨</div><div><div class="n-title">Pesan penting dari HR (${unread.length})</div><div class="n-text">${v101Esc(unread[0].subject||unread[0].text)} • Ketuk untuk membaca.</div></div>`;
+      hero.insertAdjacentElement('afterend',n);
+    }
+  }
 };
 </script>
 
