@@ -484,7 +484,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby63LfsaBNfLHep04OUIeTDrJ9LCjfX-5VFvteQoDlf8xulY46MwZGFHdLoKViobznR/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxzMrsW6NJtGdHuljd6UtlPfde3UZ1ecHJ9UoZi4fS33jEoFDwY0Oe88DYu4cmcGtHl/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -651,7 +651,7 @@ function mapBootstrapToCaches(bs) {
   if (Array.isArray(bs.leaderNotes)) {
     const mapped = bs.leaderNotes.map(n => ({
       id: n.id, leaderNik: String(n.leader_nik), leaderName: n.leader_name, employeeNik: String(n.nik), employeeName: n.employee_name,
-      category: n.category, note: n.note, date: n.date, status: 'Forwarded', hrReadAt: n.hr_read_at || null, hrReadBy: n.hr_read_by || ''
+      category: n.category, note: n.note, date: n.date, status: 'Forwarded', hrReadAt: n.hr_read_at || null, hrReadBy: n.hr_read_by || '', hrFeedback: n.hr_feedback || '', reportFileUrl: n.report_file_url || ''
     }));
     localStorage.setItem('leader_notes_all', JSON.stringify(mapped));
   }
@@ -661,7 +661,7 @@ function mapBootstrapToCaches(bs) {
     const mapped = bs.monthlyReports.map(r => ({
       id: r.id, leaderNik: String(r.leader_nik), leaderName: r.leader_name, month: r.month,
       teamCount: num_(r.member_count), avgKpi: num_(r.avg_kpi), summary: r.summary,
-      date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || ''
+      date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || '', hrFeedback: r.hr_feedback || '', reportFileUrl: r.report_file_url || ''
     }));
     localStorage.setItem('monthly_reports_all', JSON.stringify(mapped));
   }
@@ -3807,13 +3807,20 @@ renderLeaderIdeasInto = function(id){
 // Laporan dan catatan memiliki format ringkas dan escaping teks agar karakter khusus tidak merusak halaman.
 renderHRLeaderNotesPage = function(){
  v4EnsureStores();const c=document.getElementById('content'),rows=[...(state.leaderNotes||[])].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
- c.innerHTML=`<div class="v4-section-head"><strong>📝 Catatan Perbaikan dari Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="notice-strip">${rows.filter(n=>!n.hrReadAt).length} catatan belum dibaca HR</div>${rows.length?rows.map(n=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(n.employeeName||n.nik||'-')}</strong><span class="report-status">${v101Esc(n.category||'Perbaikan')}</span></div><div class="timeline-meta">Leader: ${v101Esc(n.leaderName||n.leaderNik||'-')} • ${v101Esc(n.date||'-')}</div><div style="white-space:pre-wrap;line-height:1.55;margin-top:8px">${v101Esc(n.note||'-')}</div><div class="timeline-meta">Status: ${n.hrReadAt?'Sudah dibaca HR':'Belum dibaca HR'}</div></div>`).join(''):'<div class="empty">Belum ada catatan perbaikan.</div>'}`;
+ c.innerHTML=`<div class="v4-section-head"><strong>📝 Catatan Perbaikan dari Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="notice-strip">${rows.filter(n=>!n.hrReadAt).length} catatan menunggu tinjauan HR</div>${rows.length?rows.map(n=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(n.employeeName||n.nik||'-')}</strong><span class="report-status">${v101Esc(n.category||'Perbaikan')}</span></div><div class="timeline-meta">Leader: ${v101Esc(n.leaderName||n.leaderNik||'-')} • ${v104FormatDate(n.date||'-')}</div><div style="white-space:pre-wrap;line-height:1.55;margin-top:8px">${v101Esc(n.note||'-')}</div><div class="report-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn secondary" onclick="v105MakeLeaderFile('note','${String(n.id).replace(/'/g,'')}')">📄 Buka / Buat PDF</button><button class="btn" onclick="v105ReviewLeaderReport('note','${String(n.id).replace(/'/g,'')}')">✍️ Konfirmasi & Feedback</button></div>${n.reportFileUrl?`<p><a href="${v101Esc(n.reportFileUrl)}" target="_blank" rel="noopener">Buka file laporan tersimpan</a></p>`:''}<div class="timeline-meta">Status HR: ${n.hrReadAt?'Sudah ditinjau':'Belum ditinjau'}</div>${n.hrFeedback?`<div class="notice-strip" style="margin-top:8px">Feedback HR: ${v101Esc(n.hrFeedback)}</div>`:''}</div>`).join(''):'<div class="empty">Belum ada catatan perbaikan dari Leader.</div>'}`;
 };
 renderHRMonthlyReportsPage = function(){
  v4EnsureStores();const c=document.getElementById('content'),rows=[...(state.monthlyReports||[])].sort((a,b)=>String(b.month||'').localeCompare(String(a.month||'')));
- c.innerHTML=`<div class="v4-section-head"><strong>📑 Laporan Bulanan Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${rows.length?rows.map(r=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(r.month||'-')} • ${v101Esc(r.leaderName||r.leaderNik||'-')}</strong><span class="report-status">KPI ${Number(r.avgKpi)||0}/100</span></div><div class="timeline-meta">${Number(r.teamCount)||0} anggota • Dikirim ${v101Esc(r.date||'-')}</div><div style="white-space:pre-wrap;line-height:1.6;margin-top:8px">${v101Esc(r.summary||'-')}</div><div class="timeline-meta" style="margin-top:7px">Status: ${r.hrReadAt?'Sudah dibaca HR':'Belum dibaca HR'}</div></div>`).join(''):'<div class="empty">Belum ada laporan bulanan dari Leader.</div>'}`;
+ c.innerHTML=`<div class="v4-section-head"><strong>📑 Laporan Bulanan Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${rows.length?rows.map(r=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v104FormatDate((r.month||'')+'-01')} • ${v101Esc(r.leaderName||r.leaderNik||'-')}</strong><span class="report-status">KPI ${Number(r.avgKpi)||0}/100</span></div><div class="timeline-meta">${Number(r.teamCount)||0} anggota • Dikirim ${v104FormatDate(r.date||r.createdAt||'-')}</div><div style="white-space:pre-wrap;line-height:1.6;margin-top:8px">${v101Esc(r.summary||'-')}</div><div class="report-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn secondary" onclick="v105MakeLeaderFile('monthly','${String(r.id).replace(/'/g,'')}')">📄 Buka / Buat PDF</button><button class="btn" onclick="v105ReviewLeaderReport('monthly','${String(r.id).replace(/'/g,'')}')">✍️ Konfirmasi & Feedback</button></div>${r.reportFileUrl?`<p><a href="${v101Esc(r.reportFileUrl)}" target="_blank" rel="noopener">Buka file laporan tersimpan</a></p>`:''}<div class="timeline-meta" style="margin-top:7px">Status: ${r.hrReadAt?'Sudah ditinjau HR':'Belum ditinjau HR'}</div>${r.hrFeedback?`<div class="notice-strip" style="margin-top:8px">Feedback HR: ${v101Esc(r.hrFeedback)}</div>`:''}</div>`).join(''):'<div class="empty">Belum ada laporan bulanan dari Leader.</div>'}`;
 };
-
+function v105MakeLeaderFile(kind,id){
+ if(!confirm('Buat atau perbarui file PDF di Google Drive? File akan disimpan dalam folder berdasarkan nama Leader.'))return;
+ gasCall('generateLeaderReportFile',{kind,id}).then(res=>{if(!res?.ok){showToast('❌ File gagal dibuat: '+(res?.message||res?.error||'periksa koneksi dan izin Drive'));return;}showToast('✅ PDF berhasil dibuat. Membuka file…');window.open(res.url,'_blank','noopener');if(kind==='note')renderHRLeaderNotesPage();else renderHRMonthlyReportsPage();}).catch(e=>showToast('❌ '+e.message));
+}
+function v105ReviewLeaderReport(kind,id){
+ const feedback=prompt('Masukkan konfirmasi atau feedback HR untuk Leader:');if(feedback===null)return;if(!feedback.trim()){showToast('⚠️ Feedback tidak boleh kosong.');return;}
+ gasCall('reviewLeaderReport',{kind,id,feedback:feedback.trim()}).then(res=>{if(!res?.ok){showToast('❌ Feedback gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}const rows=kind==='note'?state.leaderNotes:state.monthlyReports;const item=rows.find(x=>String(x.id)===String(id));if(item){item.hrFeedback=feedback.trim();item.hrReadAt=new Date().toISOString();localStorage.setItem(kind==='note'?'leader_notes_all':'monthly_reports_all',JSON.stringify(rows));}showToast('✅ Feedback HR tersimpan dan dapat dilihat Leader setelah sinkronisasi.');if(kind==='note')renderHRLeaderNotesPage();else renderHRMonthlyReportsPage();});
+}
 // HR mendapat menu pantau semua pengajuan libur anggota dan Leader; keputusan tetap mengikuti alur role di backend.
 function renderHRLeaveOverviewV103(){
  v4EnsureStores();const rows=[...(state.leaves||[])].sort((a,b)=>String(b.start||'').localeCompare(String(a.start||'')));
@@ -3895,3 +3902,18 @@ if(document.getElementById('content'))v104DateObserver.observe(document.getEleme
 
 </body>
 </html>
+<script id="v105ReportFilesFeedbackAndGlobalDates">
+// Global display-only formatter: ISO timestamps in cards, history and labels become readable Indonesian dates.
+(function(){
+ const fmt=window.v104FormatDate||function(v){return v;};
+ function walk(root){if(!root)return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(w.nextNode())nodes.push(w.currentNode);nodes.forEach(n=>{if(!n.parentElement||/^(SCRIPT|STYLE|TEXTAREA|INPUT|OPTION)$/i.test(n.parentElement.tagName))return;const s=n.nodeValue;if(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)||/\d{4}-\d{2}-\d{2}/.test(s)){n.nodeValue=s.replace(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?/g,m=>fmt(m,m.includes('T')));}});}
+ document.addEventListener('DOMContentLoaded',()=>{walk(document.body);new MutationObserver(ms=>ms.forEach(m=>{m.addedNodes.forEach(n=>{if(n.nodeType===Node.TEXT_NODE)walk(n.parentElement);else if(n.nodeType===Node.ELEMENT_NODE)walk(n);});})).observe(document.body,{childList:true,subtree:true});});
+})();
+</script>
+
+<script id="v105LeaderFeedbackVisibility">
+const v105OldLeaderNotes=renderLeaderNotesPage;
+renderLeaderNotesPage=function(){v105OldLeaderNotes();const c=document.getElementById('content');if(!c)return;const rows=(state.leaderNotes||[]).filter(n=>sameId_(n.leaderNik,state.activeProfile.nik));if(!rows.length)return;const cards=[...c.querySelectorAll('.report-card')];cards.forEach(card=>{const text=card.innerText||'';const n=rows.find(x=>text.includes(String(x.employeeName||''))&&text.includes(String(x.note||'').slice(0,24)));if(n&&n.hrFeedback&&!card.innerText.includes('Feedback HR')){const d=document.createElement('div');d.className='notice-strip';d.textContent='Feedback HR: '+n.hrFeedback;card.appendChild(d);}});};
+const v105OldLeaderMonthly=renderMonthlyReportPage;
+renderMonthlyReportPage=function(){v105OldLeaderMonthly();const c=document.getElementById('content');if(!c)return;(state.monthlyReports||[]).filter(r=>sameId_(r.leaderNik,state.activeProfile.nik)).forEach(r=>{if(!r.hrFeedback)return;const cards=[...c.querySelectorAll('.report-card')];const card=cards.find(x=>(x.innerText||'').includes(String(r.month||''))&&(x.innerText||'').includes(String(r.summary||'').slice(0,20)));if(card&&!card.innerText.includes('Feedback HR')){const d=document.createElement('div');d.className='notice-strip';d.textContent='Feedback HR: '+r.hrFeedback;card.appendChild(d);}});};
+</script>
