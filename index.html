@@ -484,7 +484,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxzMrsW6NJtGdHuljd6UtlPfde3UZ1ecHJ9UoZi4fS33jEoFDwY0Oe88DYu4cmcGtHl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz7wZYL3-A7TWvl9I3czUOREcfSgXs8fN3e8lzt0aEWD-Z0zHTtOFxiXem1QcPTk2U_/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -2902,11 +2902,11 @@ function v6ReconcileAbsenceForUser(user, lookbackDays=31){
     const alphaKey=`${user.nik}_${iso}_alpha`, checkoutKey=`${user.nik}_${iso}_checkout`;
     if(!hasIn){
       if(!log.some(x=>x.key===alphaKey)){
-        const deduct=Math.min(V6_POLICY.alphaPenaltyXp,xp); xp-=deduct;
+        const deduct=V6_POLICY.alphaPenaltyXp; xp-=deduct;
         log.push({key:alphaKey,nik:user.nik,date:iso,type:'Alpha',xpDelta:-deduct,reason:'Tidak ada Absen Masuk, tidak ada libur disetujui, dan merupakan hari kerja.',createdAt:Date.now()});changed=true;
       }
     }else if(!hasOut && !log.some(x=>x.key===checkoutKey)){
-      const deduct=Math.min(V6_POLICY.missingCheckoutPenaltyXp,xp); xp-=deduct;
+      const deduct=V6_POLICY.missingCheckoutPenaltyXp; xp-=deduct;
       log.push({key:checkoutKey,nik:user.nik,date:iso,type:'Tidak Absen Pulang',xpDelta:-deduct,reason:'Ada Absen Masuk tetapi tidak ada Absen Pulang.',createdAt:Date.now()});changed=true;
     }
   }
@@ -3769,7 +3769,7 @@ approveLeave = async function(id,isApprove){
   const status=isApprove?'Approved':'Rejected';
   if(GAS_URL){const res=await gasCall('reviewLeave',{id:String(item.id),status,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Persetujuan gagal disimpan.'));return;}}
   item.status=status;item.reviewedAt=Date.now();localStorage.setItem('leaves_all',JSON.stringify(state.leaves));
-  showToast(isApprove?'✅ Pengajuan libur disetujui.':'❌ Pengajuan libur ditolak.');renderLeaderDashboard();
+  showToast(isApprove?'✅ Pengajuan libur disetujui.':'❌ Pengajuan libur ditolak.');showLeaderSection('leaves');
 };
 approveHalBaik = async function(id,isApprove){
   const item=(state.halBaik||[]).find(x=>String(x.id)===String(id));if(!item){showToast('⚠️ Kontribusi tidak ditemukan.');return;}
@@ -3777,14 +3777,14 @@ approveHalBaik = async function(id,isApprove){
   if(GAS_URL){const res=await gasCall('reviewGoodDeed',{id:String(item.id),status,note,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Konfirmasi gagal disimpan.'));return;}}
   item.status=status;item.leaderNote=note;item.reviewedAt=Date.now();
   if(isApprove&&!item.xpAwarded){item.xpAwarded=true;}
-  localStorage.setItem('halbaik_all',JSON.stringify(state.halBaik));showToast(isApprove?'✅ Kontribusi dikonfirmasi.':'Kontribusi tidak disetujui.');renderLeaderDashboard();
+  localStorage.setItem('halbaik_all',JSON.stringify(state.halBaik));showToast(isApprove?'✅ Kontribusi dikonfirmasi.':'Kontribusi tidak disetujui.');showLeaderSection('halbaik');
 };
 approveLeaderIdea = async function(id,isApprove){
   const item=(state.ideas||[]).find(x=>String(x.id)===String(id));if(!item){showToast('⚠️ Ide tidak ditemukan.');return;}
   const noteEl=document.getElementById('ideNote_'+id),note=noteEl?(noteEl.value.trim()||'-'):'-';const status=isApprove?'Forwarded':'Rejected';
   if(GAS_URL){const res=await gasCall('reviewIdeaLeader',{id:String(item.id),status,note,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Review ide gagal disimpan.'));return;}}
   item.status=status;item.leaderNote=note;item.reviewedAt=Date.now();item.slaStatus=isApprove?'Diteruskan ke HR':'Selesai di Leader';
-  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(isApprove?'✅ Ide diteruskan ke HR.':'❌ Ide ditolak.');renderLeaderDashboard();
+  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(isApprove?'✅ Ide diteruskan ke HR.':'❌ Ide ditolak.');showLeaderSection('ideas');
 };
 
 // Antrean Leader disaring dengan ID tim konsisten, sedangkan riwayat yang sudah diputuskan tidak lagi muncul di antrean.
@@ -3916,4 +3916,9 @@ const v105OldLeaderNotes=renderLeaderNotesPage;
 renderLeaderNotesPage=function(){v105OldLeaderNotes();const c=document.getElementById('content');if(!c)return;const rows=(state.leaderNotes||[]).filter(n=>sameId_(n.leaderNik,state.activeProfile.nik));if(!rows.length)return;const cards=[...c.querySelectorAll('.report-card')];cards.forEach(card=>{const text=card.innerText||'';const n=rows.find(x=>text.includes(String(x.employeeName||''))&&text.includes(String(x.note||'').slice(0,24)));if(n&&n.hrFeedback&&!card.innerText.includes('Feedback HR')){const d=document.createElement('div');d.className='notice-strip';d.textContent='Feedback HR: '+n.hrFeedback;card.appendChild(d);}});};
 const v105OldLeaderMonthly=renderMonthlyReportPage;
 renderMonthlyReportPage=function(){v105OldLeaderMonthly();const c=document.getElementById('content');if(!c)return;(state.monthlyReports||[]).filter(r=>sameId_(r.leaderNik,state.activeProfile.nik)).forEach(r=>{if(!r.hrFeedback)return;const cards=[...c.querySelectorAll('.report-card')];const card=cards.find(x=>(x.innerText||'').includes(String(r.month||''))&&(x.innerText||'').includes(String(r.summary||'').slice(0,20)));if(card&&!card.innerText.includes('Feedback HR')){const d=document.createElement('div');d.className='notice-strip';d.textContent='Feedback HR: '+r.hrFeedback;card.appendChild(d);}});};
+</script>
+
+<script>
+/* V10.6 policy note: XP is a signed reward balance; KPI is a separate 0-100 weighted performance score. */
+window.GEOFACЕ_POLICY_V10_6 = { xpMayBeNegative: true, kpiRange: [0,100], approvedLeaveStatus: 'Libur', approvedLeaveExcludedFromDiscipline: true };
 </script>
