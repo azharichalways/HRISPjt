@@ -3731,5 +3731,139 @@ gasCall=async function(action,payload={}){
 };
 </script>
 
+
+
+<!-- V10.3 HOTFIX: camera UX, stable IDs, approval visibility and HR leave overview -->
+<style id="v103HotfixStyles">
+  .camera-wrap{aspect-ratio:3/4!important;width:min(100%, min(68vw, 310px))!important;max-height: min(42dvh, 340px)!important;margin:6px auto 8px!important;border-radius:14px!important}
+  .camera-wrap video,.camera-wrap canvas{width:100%;height:100%;object-fit:cover;display:block}
+  #cameraSlot .section-title{margin-top:8px!important}
+  #btnCapture{position:sticky;bottom:68px;z-index:5;box-shadow:0 5px 14px rgba(15,23,42,.16)}
+  @media(max-height:700px){.camera-wrap{max-height:34dvh!important;width:min(100%, min(58vw, 250px))!important}.shift-grid{margin-bottom:6px}.typechoice{margin-bottom:6px}}
+</style>
+<script id="v103Hotfix">
+// Status pending yang valid; permohonan Leader ke HR juga harus masuk antrean HR.
+isPending_ = function(v){ return ['pending','pendinghr','pending_hr','menunggu leader','menunggu hr'].includes(String(v??'').trim().toLowerCase()); };
+
+// Kamera dan foto selalu non-mirror. Ambil gambar lalu langsung tampilkan hasil tangkapan;
+// proses upload/penyimpanan berjalan di latar belakang tanpa menahan interaksi kamera.
+capturePhotoDataUrl_ = function(){
+  const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');
+  if(!video||!canvas||!video.videoWidth)return null;
+  const maxDim=640,ratio=Math.min(1,maxDim/Math.max(video.videoWidth,video.videoHeight));
+  canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+  // drawImage tanpa transform = hasil foto tidak mirror
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  try{return canvas.toDataURL('image/jpeg',0.5);}catch(e){console.warn(e);return null;}
+};
+startCamera = async function(){
+  stopCamera();const video=document.getElementById('camVideo');if(!video)return;
+  try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:state.cameraFacing||'user'},width:{ideal:640},height:{ideal:853}},audio:false});state.stream=stream;video.srcObject=stream;video.style.setProperty('transform','none','important');await video.play().catch(()=>{});if(typeof v102CameraTools==='function')v102CameraTools();}
+  catch(err){console.warn(err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
+};
+
+// Cocokkan ID sebagai string karena ID dari Google Sheets sering terbaca string, sedangkan ID baru angka.
+approveLeave = async function(id,isApprove){
+  const item=(state.leaves||[]).find(x=>String(x.id)===String(id));if(!item){showToast('⚠️ Pengajuan tidak ditemukan. Muat ulang data lalu coba lagi.');return;}
+  const status=isApprove?'Approved':'Rejected';
+  if(GAS_URL){const res=await gasCall('reviewLeave',{id:String(item.id),status,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Persetujuan gagal disimpan.'));return;}}
+  item.status=status;item.reviewedAt=Date.now();localStorage.setItem('leaves_all',JSON.stringify(state.leaves));
+  showToast(isApprove?'✅ Pengajuan libur disetujui.':'❌ Pengajuan libur ditolak.');renderLeaderDashboard();
+};
+approveHalBaik = async function(id,isApprove){
+  const item=(state.halBaik||[]).find(x=>String(x.id)===String(id));if(!item){showToast('⚠️ Kontribusi tidak ditemukan.');return;}
+  const noteEl=document.getElementById('note_'+id),note=noteEl?(noteEl.value.trim()||'-'):'-';const status=isApprove?'Approved':'Rejected';
+  if(GAS_URL){const res=await gasCall('reviewGoodDeed',{id:String(item.id),status,note,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Konfirmasi gagal disimpan.'));return;}}
+  item.status=status;item.leaderNote=note;item.reviewedAt=Date.now();
+  if(isApprove&&!item.xpAwarded){item.xpAwarded=true;}
+  localStorage.setItem('halbaik_all',JSON.stringify(state.halBaik));showToast(isApprove?'✅ Kontribusi dikonfirmasi.':'Kontribusi tidak disetujui.');renderLeaderDashboard();
+};
+approveLeaderIdea = async function(id,isApprove){
+  const item=(state.ideas||[]).find(x=>String(x.id)===String(id));if(!item){showToast('⚠️ Ide tidak ditemukan.');return;}
+  const noteEl=document.getElementById('ideNote_'+id),note=noteEl?(noteEl.value.trim()||'-'):'-';const status=isApprove?'Forwarded':'Rejected';
+  if(GAS_URL){const res=await gasCall('reviewIdeaLeader',{id:String(item.id),status,note,reviewerNik:state.activeProfile.nik});if(!res||!res.ok){showToast('❌ '+(res?.message||res?.error||'Review ide gagal disimpan.'));return;}}
+  item.status=status;item.leaderNote=note;item.reviewedAt=Date.now();item.slaStatus=isApprove?'Diteruskan ke HR':'Selesai di Leader';
+  localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(isApprove?'✅ Ide diteruskan ke HR.':'❌ Ide ditolak.');renderLeaderDashboard();
+};
+
+// Antrean Leader disaring dengan ID tim konsisten, sedangkan riwayat yang sudah diputuskan tidak lagi muncul di antrean.
+renderLeaderLeavesInto = function(id){
+ const list=document.getElementById(id);if(!list)return;const nik=String(state.activeProfile.nik);
+ const rows=(state.leaves||[]).filter(x=>isPending_(x.status)&&sameId_(x.leaderNik,nik));
+ list.innerHTML=rows.length?rows.map(l=>`<div class="decision-card"><strong>${v101Esc(l.nama||l.nik)} (${v101Esc(l.brand||'-')})</strong><div class="timeline-meta">📅 ${v101Esc(l.start||l.start_date||'-')} s/d ${v101Esc(l.end||l.end_date||'-')}</div><div class="timeline-desc">${v101Esc(l.ket||l.reason||'Tanpa keterangan')}</div><div class="decision-actions"><button class="btn success" onclick="approveLeave('${String(l.id)}',true)">Setujui</button><button class="btn danger" onclick="approveLeave('${String(l.id)}',false)">Tolak</button><span class="status-pill pending">Menunggu</span></div></div>`).join(''):'<div class="empty">Tidak ada pengajuan libur tim yang menunggu persetujuan.</div>';
+};
+renderLeaderHalBaikInto = function(id){
+ const list=document.getElementById(id);if(!list)return;const nik=String(state.activeProfile.nik);
+ const rows=(state.halBaik||[]).filter(x=>isPending_(x.status)&&sameId_(x.leaderNik,nik));
+ list.innerHTML=rows.length?rows.map(h=>`<div class="decision-card"><strong>${v101Esc(h.nama||h.nik)} — ${v101Esc(h.title||'Kontribusi')}</strong><div class="timeline-desc">${v101Esc(h.essay||'')}</div><label>Catatan Leader (opsional)</label><input id="note_${h.id}" placeholder="Catatan apresiasi"><div class="decision-actions"><button class="btn success" onclick="approveHalBaik('${String(h.id)}',true)">Konfirmasi</button><button class="btn danger" onclick="approveHalBaik('${String(h.id)}',false)">Tolak</button><span class="status-pill pending">Menunggu</span></div></div>`).join(''):'<div class="empty">Tidak ada kontribusi tim yang menunggu review.</div>';
+};
+renderLeaderIdeasInto = function(id){
+ const list=document.getElementById(id);if(!list)return;const nik=String(state.activeProfile.nik);
+ const rows=(state.ideas||[]).filter(x=>isPending_(x.status)&&sameId_(x.leaderNik,nik));
+ list.innerHTML=rows.length?rows.map(i=>`<div class="decision-card"><strong>${v101Esc(i.nama||i.nik)} — ${v101Esc(i.title||'Ide')}</strong><div class="timeline-desc">${v101Esc(i.desc||i.description||'')}</div><label>Catatan untuk HR (opsional)</label><input id="ideNote_${i.id}" placeholder="Masukan untuk HR"><div class="decision-actions"><button class="btn success" onclick="approveLeaderIdea('${String(i.id)}',true)">Teruskan ke HR</button><button class="btn danger" onclick="approveLeaderIdea('${String(i.id)}',false)">Tolak</button><span class="status-pill pending">Menunggu</span></div></div>`).join(''):'<div class="empty">Tidak ada ide anggota yang menunggu review.</div>';
+};
+
+// Laporan dan catatan memiliki format ringkas dan escaping teks agar karakter khusus tidak merusak halaman.
+renderHRLeaderNotesPage = function(){
+ v4EnsureStores();const c=document.getElementById('content'),rows=[...(state.leaderNotes||[])].sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+ c.innerHTML=`<div class="v4-section-head"><strong>📝 Catatan Perbaikan dari Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="notice-strip">${rows.filter(n=>!n.hrReadAt).length} catatan belum dibaca HR</div>${rows.length?rows.map(n=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(n.employeeName||n.nik||'-')}</strong><span class="report-status">${v101Esc(n.category||'Perbaikan')}</span></div><div class="timeline-meta">Leader: ${v101Esc(n.leaderName||n.leaderNik||'-')} • ${v101Esc(n.date||'-')}</div><div style="white-space:pre-wrap;line-height:1.55;margin-top:8px">${v101Esc(n.note||'-')}</div><div class="timeline-meta">Status: ${n.hrReadAt?'Sudah dibaca HR':'Belum dibaca HR'}</div></div>`).join(''):'<div class="empty">Belum ada catatan perbaikan.</div>'}`;
+};
+renderHRMonthlyReportsPage = function(){
+ v4EnsureStores();const c=document.getElementById('content'),rows=[...(state.monthlyReports||[])].sort((a,b)=>String(b.month||'').localeCompare(String(a.month||'')));
+ c.innerHTML=`<div class="v4-section-head"><strong>📑 Laporan Bulanan Leader</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${rows.length?rows.map(r=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(r.month||'-')} • ${v101Esc(r.leaderName||r.leaderNik||'-')}</strong><span class="report-status">KPI ${Number(r.avgKpi)||0}/100</span></div><div class="timeline-meta">${Number(r.teamCount)||0} anggota • Dikirim ${v101Esc(r.date||'-')}</div><div style="white-space:pre-wrap;line-height:1.6;margin-top:8px">${v101Esc(r.summary||'-')}</div><div class="timeline-meta" style="margin-top:7px">Status: ${r.hrReadAt?'Sudah dibaca HR':'Belum dibaca HR'}</div></div>`).join(''):'<div class="empty">Belum ada laporan bulanan dari Leader.</div>'}`;
+};
+
+// HR mendapat menu pantau semua pengajuan libur anggota dan Leader; keputusan tetap mengikuti alur role di backend.
+function renderHRLeaveOverviewV103(){
+ v4EnsureStores();const rows=[...(state.leaves||[])].sort((a,b)=>String(b.start||'').localeCompare(String(a.start||'')));
+ const c=document.getElementById('content');c.innerHTML=`<div class="v4-section-head"><strong>🏖️ Monitor Pengajuan Libur</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${rows.length?rows.map(l=>`<div class="report-card"><div style="display:flex;justify-content:space-between;gap:8px"><strong>${v101Esc(l.nama||l.nik||'-')}</strong><span class="status-pill ${isPending_(l.status)?'pending':String(l.status).toLowerCase()==='approved'?'approved':'rejected'}">${v101Esc(l.status||'Pending')}</span></div><div class="timeline-meta">NIK ${v101Esc(l.nik||'-')} • Leader ${v101Esc(l.leaderNik||'Tidak ditetapkan')}</div><div style="font-size:12px;font-weight:700;margin-top:7px">📅 ${v101Esc(l.start||l.start_date||'-')} s/d ${v101Esc(l.end||l.end_date||'-')}</div><div class="timeline-desc">${v101Esc(l.ket||l.reason||'Tanpa keterangan')}</div></div>`).join(''):'<div class="empty">Belum ada pengajuan libur.</div>'}`;
+}
+const v103OldHRDashboard=renderHRDashboard;
+renderHRDashboard=function(){v103OldHRDashboard();const c=document.getElementById('content');if(!c)return;const grid=c.querySelector('.home-grid');if(grid&&!grid.querySelector('[data-v103-leaves]')){const btn=document.createElement('button');btn.className='home-tile';btn.setAttribute('data-v103-leaves','1');btn.innerHTML='<div class="icon">🏖️</div><div class="title">Monitor Pengajuan Libur</div><div class="desc">Lihat tanggal libur anggota dan Leader.</div>';btn.onclick=renderHRLeaveOverviewV103;grid.appendChild(btn);}};
+</script>
+
+
+<script id="v103AsyncSubmitFix">
+capturePhotoAndAbsen = function(){
+  const isHr=state.activeProfile.role==='hr';
+  if(isHr&&isHRNonWorkingDay()){showToast('🏖️ Hari libur HR tidak memengaruhi XP atau KPI.');return;}
+  if(isHr)state.selectedShift='pagi';
+  if(state.selectedShift!=='malam'){
+    if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
+    if(state.distanceToOffice>(state.officeConfig?.maxDistance||300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas ${state.officeConfig?.maxDistance||300}m.`);return;}
+  }
+  const photo=capturePhotoDataUrl_();if(!photo){showToast('⚠️ Foto belum siap. Pastikan kamera aktif.');return;}
+  const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Foto diambil • menyimpan di latar belakang…';}
+  const slot=document.getElementById('cameraSlot');
+  // UI langsung merespons setelah capture; proses Drive/Sheets berjalan asynchronous.
+  if(slot)slot.innerHTML=`<div class="card" style="text-align:center;padding:12px"><img src="${photo}" alt="Pratinjau foto presensi" style="width:min(100%,220px);aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid #cbd5e1"><div style="font-weight:800;margin-top:8px">📸 Foto berhasil diambil</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Presensi sedang disimpan. Jangan tutup aplikasi dulu.</div><div class="v1022-busy" style="margin:10px auto;width:24px;height:24px;border:3px solid #dbeafe;border-top-color:#2563eb;border-radius:50%"></div></div>`;
+  const payload={id:'ATT-'+Date.now()+'-'+String(state.activeProfile.nik),shift:isHr?'pagi':state.selectedShift,type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,photoBase64:photo};
+  gasCall('addAttendance',payload).then(res=>{
+    if(!res||!res.ok){showToast('⛔ '+(res?.message||res?.error||'Presensi gagal disimpan. Silakan coba kembali.'));if(slot)slot.innerHTML=`<div class="card rejected-border" style="text-align:center"><div style="font-weight:800">Presensi belum tersimpan</div><img src="${photo}" alt="Foto yang diambil" style="width:100px;height:130px;object-fit:cover;border-radius:10px;margin:8px auto"><button class="btn" onclick="renderAbsenTab()">Coba Lagi</button></div>`;return;}
+    const r=res.record;state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));
+    const localRecord={id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:r.lat,lng:r.lng,xpEarned:num_(r.xp_earned),role:r.role,photo,photoUrl:r.photo_url};
+    state.records.unshift(localRecord);localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));updateGamifyBar();stopCamera();fireConfetti();
+    const st=attendanceStatusStyle_(r.status_text);showToast(`✅ Presensi tersimpan • ${r.status_text} • ${Number(r.xp_earned)>0?'+':''}${r.xp_earned} XP`);
+    if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:14px;background:${st.bg};border-color:${st.color}"><img src="${photo}" alt="Foto presensi" style="width:min(100%,180px);aspect-ratio:3/4;object-fit:cover;border-radius:12px;margin:0 auto 8px;display:block;border:2px solid ${st.color}"><div style="font-size:14px;font-weight:800;color:${st.color}">Presensi ${String(r.type).toUpperCase()} Berhasil</div><div style="font-size:11px;color:var(--text-dim);margin-top:5px">${r.date} • ${r.time} • ${r.distance_m} m</div><div style="font-size:12px;font-weight:800;color:${st.color};margin-top:4px">${st.emoji} ${r.status_text} • ${Number(r.xp_earned)>0?'+':''}${r.xp_earned} XP</div><button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+  }).catch(err=>{console.error(err);showToast('❌ Koneksi gagal saat menyimpan presensi. Silakan cek riwayat sebelum mencoba ulang.');if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}});
+};
+
+submitLeaderNote = async function(){
+ const el=document.getElementById('noteMember'),noteEl=document.getElementById('leaderImproveNote');if(!el||!noteEl)return;
+ const nik=el.value,note=noteEl.value.trim(),category=document.getElementById('noteCategory').value;if(!note){showToast('⚠️ Isi catatan perbaikan terlebih dahulu.');return;}
+ initUsers();const u=state.allUsers.find(x=>String(x.nik)===String(nik));const item={id:String(Date.now()),leaderNik:String(state.activeProfile.nik),leaderName:state.activeProfile.nama,employeeNik:String(nik),employeeName:u?.nama||nik,category,note,date:new Date().toLocaleDateString('en-CA'),status:'Forwarded'};
+ if(GAS_URL){const res=await gasCall('addLeaderNote',{id:item.id,nik,category,note,date:item.date});if(!res?.ok){showToast('❌ Catatan gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}}
+ state.leaderNotes=(state.leaderNotes||[]).filter(x=>String(x.id)!==String(item.id));state.leaderNotes.unshift(item);localStorage.setItem('leader_notes_all',JSON.stringify(state.leaderNotes));showToast('✅ Catatan perbaikan tersimpan dan diteruskan ke HR.');renderLeaderNotesPage();
+};
+submitMonthlyReport = async function(){
+ const month=document.getElementById('reportMonth')?.value,summary=document.getElementById('monthlySummary')?.value.trim();if(!month||!summary){showToast('⚠️ Bulan dan ringkasan laporan wajib diisi.');return;}
+ initUsers();const team=state.allUsers.filter(u=>sameId_(u.leaderNik,state.activeProfile.nik)),avg=team.length?Math.round(team.reduce((s,u)=>s+v4KpiScore(u.nik),0)/team.length):0;
+ const existing=(state.monthlyReports||[]).find(r=>sameId_(r.leaderNik,state.activeProfile.nik)&&String(r.month)===String(month));const rec={id:String(existing?.id||Date.now()),leaderNik:String(state.activeProfile.nik),leaderName:state.activeProfile.nama,month,summary,teamCount:team.length,avgKpi:avg,date:new Date().toLocaleDateString('en-CA')};
+ if(GAS_URL){const res=await gasCall('addMonthlyReport',{id:rec.id,month,memberCount:rec.teamCount,avgKpi:rec.avgKpi,summary});if(!res?.ok){showToast('❌ Laporan gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}}
+ state.monthlyReports=(state.monthlyReports||[]).filter(r=>!(sameId_(r.leaderNik,rec.leaderNik)&&String(r.month)===String(month)));state.monthlyReports.unshift(rec);localStorage.setItem('monthly_reports_all',JSON.stringify(state.monthlyReports));showToast('✅ Laporan bulanan tersimpan dan diteruskan ke HR.');renderMonthlyReportPage();
+};
+</script>
+
 </body>
 </html>
