@@ -3865,5 +3865,33 @@ submitMonthlyReport = async function(){
 };
 </script>
 
+
+<script id="v104ReadableDatesAndLeaderStay">
+// Format tanggal konsisten untuk seluruh role: 14 Okt 2026, bukan ISO mentah.
+function v104FormatDate(value, withTime=false){
+  if(value===null||value===undefined||value==='')return '-';
+  const raw=String(value).trim();
+  // Tanggal ISO murni diparse lokal agar tidak bergeser ke hari sebelumnya.
+  let d;
+  const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if(m){ d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),Number(m[4]||0),Number(m[5]||0),Number(m[6]||0)); }
+  else d=new Date(raw);
+  if(Number.isNaN(d.getTime()))return raw;
+  const date=d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+  return withTime?date+' • '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):date;
+}
+// Tampilkan tanggal yang mudah dibaca pada antrean pengajuan libur Leader.
+const v104RenderLeaderLeavesInto=renderLeaderLeavesInto;
+renderLeaderLeavesInto=function(id){v104RenderLeaderLeavesInto(id);const list=document.getElementById(id);if(!list)return;list.querySelectorAll('.decision-card .timeline-meta').forEach(el=>{el.innerHTML=el.innerHTML.replace(/(\d{4}-\d{2}-\d{2}(?:T[^ <]+)?)/g, m=>v104FormatDate(m));});};
+// Tindakan persetujuan mempertahankan halaman/menu saat ini, bukan memaksa kembali ke Beranda.
+const v104KeepLeaderPage=(fn)=>async function(...args){const current=state?.leaderSubTab||state?.activeLeaderSection||state?.currentLeaderSection||'';const result=await fn.apply(this,args);if(current){state.leaderSubTab=current;state.activeLeaderSection=current;state.currentLeaderSection=current;}return result;};
+approveLeave=v104KeepLeaderPage(approveLeave);
+approveHalBaik=v104KeepLeaderPage(approveHalBaik);
+approveLeaderIdea=v104KeepLeaderPage(approveLeaderIdea);
+// Format ISO tanggal pada area laporan/catatan HR setelah dirender.
+const v104DateObserver=new MutationObserver(()=>{const root=document.getElementById('content');if(!root)return;root.querySelectorAll('.timeline-meta,.report-card,.decision-card').forEach(el=>{if(el.dataset.v104DatesDone)return;el.dataset.v104DatesDone='1';el.innerHTML=el.innerHTML.replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:?\d{2}\b/g,m=>v104FormatDate(m,true)).replace(/\b\d{4}-\d{2}-\d{2}\b/g,m=>v104FormatDate(m));});});
+if(document.getElementById('content'))v104DateObserver.observe(document.getElementById('content'),{childList:true,subtree:true});
+</script>
+
 </body>
 </html>
