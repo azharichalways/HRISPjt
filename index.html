@@ -416,6 +416,23 @@
 .v4-section-head{display:flex;align-items:center;justify-content:space-between;margin:4px 0 9px}.v4-section-head strong{font-size:12px}.v4-back{border:0;background:transparent;color:#2563eb;font-size:10px;font-weight:700;cursor:pointer}
 .report-card{border:1px solid #dbeafe;border-radius:13px;padding:12px;margin-bottom:9px}.report-status{font-size:9px;font-weight:800;padding:3px 7px;border-radius:99px;background:#eff6ff;color:#1d4ed8}
 .offday-box{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:13px;padding:16px;text-align:center;color:#475569}.offday-box strong{display:block;font-size:13px;margin-bottom:4px}.offday-box span{font-size:10.5px}
+/* V10.7: layar presensi ringkas, pilihan shift dapat dibuka, tombol capture selalu mudah dijangkau */
+.shift-picker{border:1px solid var(--border);border-radius:11px;background:var(--surface-secondary);margin:6px 0 10px;overflow:hidden}
+.shift-picker summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;color:var(--text-main)}
+.shift-picker summary::-webkit-details-marker{display:none}
+.shift-picker .shift-grid{padding:0 8px 8px;margin:0}
+.shift-current{font-size:11px;color:var(--brand-primary);font-weight:700}
+#content.presensi-compact{padding:8px 12px calc(150px + env(safe-area-inset-bottom));overflow-y:auto}
+#content.presensi-compact .location-badge{margin-bottom:6px;padding:6px 9px;font-size:10.5px}
+#content.presensi-compact h2.section-title{margin:7px 0 5px;font-size:10.5px}
+#content.presensi-compact .typechoice{margin-bottom:5px;gap:6px}
+#content.presensi-compact .typechoice button{padding:8px;font-size:11.5px}
+#content.presensi-compact .camera-wrap{width:min(54vw,210px);height:min(36dvh,270px);aspect-ratio:3/4;max-height:270px;margin:0 auto 7px}
+#content.presensi-compact #cameraSlot .section-title{text-align:left;margin-top:4px}
+#content.presensi-compact #btnCapture{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(66px + env(safe-area-inset-bottom));width:min(calc(100% - 24px),456px);z-index:50;box-shadow:0 4px 12px #0f172a35;margin:0}
+#content.presensi-compact .camera-controls{display:flex;gap:8px;margin-top:5px}
+#content.presensi-compact .camera-controls button{flex:1;padding:8px;font-size:11px}
+@media(max-height:720px){#content.presensi-compact .camera-wrap{height:min(29dvh,190px);width:min(42vw,160px)}#content.presensi-compact{padding-top:5px}}
 @media(max-width:390px){.camera-wrap{max-height:180px}.metric-row{grid-template-columns:repeat(2,1fr)}}
 
 </style>
@@ -484,7 +501,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz7wZYL3-A7TWvl9I3czUOREcfSgXs8fN3e8lzt0aEWD-Z0zHTtOFxiXem1QcPTk2U_/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz1tXVOCZaYEMLkMrtNrMSp3kfKhb6pv_srP2WmNGtk0MvDusKZvL9ig_gfAPz5ce16/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -1195,7 +1212,7 @@ function startCamera() {
   if (!video) return;
 
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: state.cameraFacing || 'user' } }, audio: false })
       .then(s => {
         state.stream = s;
         video.srcObject = s;
@@ -1257,7 +1274,7 @@ function capturePhotoAndAbsen() {
   }
 
   state.activeProfile.xp = (state.activeProfile.xp || 0) + xpEarned;
-  state.activeProfile.streak = (state.activeProfile.streak || 0) + 1;
+  // Streak dihitung server dari hari kerja yang benar-benar dipresensikan.
   saveProfileChanges();
 
   const newRecord = {
@@ -1582,35 +1599,19 @@ function renderAgendaList() {
   }
 }
 
-function resolveAgenda(agendaId, statusChoice) {
-  const ag = state.agendas.find(a => a.id === agendaId);
-  if (!ag) return;
-
-  const myNik = state.activeProfile.nik;
-  const key = agendaId + '_' + myNik;
-  const now = new Date();
-
-  const xpAward = statusChoice === 'mengikuti' ? v5AgendaXp(ag) : 0;
-
-  state.agendaUserStatus[key] = {
-    status: statusChoice,
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
-    xpAward
-  };
-
-  localStorage.setItem('agenda_user_status_all', JSON.stringify(state.agendaUserStatus));
-  if (GAS_URL) gasCall('setAgendaStatus', { key, agendaId, nik: myNik, status: statusChoice, date: state.agendaUserStatus[key].date });
-
-  if (xpAward > 0) {
-    state.activeProfile.xp = (state.activeProfile.xp || 0) + xpAward;
-    saveProfileChanges();
-    fireConfetti();
-    showToast(`🎉 Agenda diselesaikan! +${xpAward} XP ditambahkan.`);
-  } else {
-    showToast('Agenda dicatat sebagai Tidak Mengikuti.');
-  }
-
+async function resolveAgenda(agendaId, statusChoice) {
+  const ag=state.agendas.find(a=>String(a.id)===String(agendaId)); if(!ag)return;
+  const nik=String(state.activeProfile.nik), key=String(agendaId)+'_'+nik;
+  if(state.agendaUserStatus[key]){showToast('Agenda ini sudah dikonfirmasi.');return;}
+  const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  const res=await gasCall('setAgendaStatus',{key,agendaId,nik,status:statusChoice,date});
+  if(!res||res.ok!==true){showToast('Gagal menyimpan konfirmasi agenda: '+(res?.message||res?.error||'periksa koneksi'));return;}
+  state.agendaUserStatus[key]={status:statusChoice,date,time:new Date().toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}),xpAward:Number(res.xpAward)||0};
+  localStorage.setItem('agenda_user_status_all',JSON.stringify(state.agendaUserStatus));
+  if(res.user){state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));}
+  updateGamifyBar();
+  if(Number(res.xpAward)>0){fireConfetti();showToast(`Konfirmasi agenda tersimpan • +${res.xpAward} XP`);}
+  else showToast('Konfirmasi agenda berhasil disimpan.');
   renderAgendaTab();
 }
 
@@ -2702,12 +2703,22 @@ function isHRNonWorkingDay(date=new Date()){
 function renderAbsenTab(){
   const c=document.getElementById('content'), isHr=state.activeProfile.role==='hr', off=isHr&&isHRNonWorkingDay();
   if(isHr) state.selectedShift='pagi';
+  c.classList.add('presensi-compact');
+  const shift=SHIFTS[state.selectedShift]||SHIFTS.pagi;
   c.innerHTML=`<div id="locationBadge" class="location-badge invalid"><span>📍</span> Memeriksa Lokasi GPS...</div>
-    ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Sabtu, Minggu, dan tanggal libur nasional tidak mengurangi XP maupun Skor KPI. Presensi reguler HR tidak diwajibkan.</span></div>`:`
+    ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Hari libur HR tidak mengurangi XP atau Skor KPI.</span></div>`:`
     <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>
-    <h2 class="section-title">${isHr?'Shift HR':'Pilih Shift Kerja'}</h2>${isHr?`<div class="shift-grid"><div class="shift-tile selected" style="grid-column:1/-1"><div class="label">Pagi • Senin–Jumat</div><div class="time mono">${HR_WORK_SHIFT.start} - ${HR_WORK_SHIFT.end}</div></div></div>`:`<div class="shift-grid">${Object.entries(SHIFTS).map(([k,s])=>`<div class="shift-tile ${state.selectedShift===k?'selected':''}" onclick="selectShift('${k}')"><div class="label">${s.label}</div><div class="time mono">${s.start} - ${s.end}</div></div>`).join('')}</div>`}
-    <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button></div><div id="resultSlot"></div>`}`;
+    ${isHr?`<h2 class="section-title">Shift HR</h2><div class="shift-picker"><div style="padding:10px 12px;font-size:12px;font-weight:800">Pagi • Senin–Jumat <span class="shift-current">${HR_WORK_SHIFT.start}–${HR_WORK_SHIFT.end}</span></div></div>`:`<h2 class="section-title">Shift Kerja</h2><details class="shift-picker" id="shiftPicker"><summary><span>Pilih shift secara sadar</span><span class="shift-current">${shift.label} · ${shift.start}–${shift.end}　⌄</span></summary><div class="shift-grid">${Object.entries(SHIFTS).map(([k,s])=>`<button type="button" class="shift-tile ${state.selectedShift===k?'selected':''}" onclick="selectShift('${k}')"><div class="label">${s.label}</div><div class="time mono">${s.start} - ${s.end}</div></button>`).join('')}</div></details>`}
+    <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button><div class="camera-controls"><button class="btn secondary" type="button" onclick="switchCameraFacing('user')">🤳 Kamera Depan</button><button class="btn secondary" type="button" onclick="switchCameraFacing('environment')">📷 Kamera Belakang</button></div></div><div id="resultSlot"></div>`}`;
   updateLocationBadgeUI(); if(!off)startCamera();
+}
+
+async function switchCameraFacing(mode){
+  state.cameraFacing=mode;
+  stopCamera();
+  const video=document.getElementById('camVideo'); if(!video)return;
+  try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:mode}},audio:false});state.stream=stream;video.srcObject=stream;await video.play();}
+  catch(e){showToast('Kamera tidak tersedia. Periksa izin kamera perangkat.');}
 }
 
 function capturePhotoDataUrl_(){
@@ -2768,7 +2779,7 @@ async function capturePhotoAndAbsen(){
 
 function visibleAgendasForUser(){
   const u=state.activeProfile;
-  return state.agendas.filter(a=>a.scope!=='team'||u.role==='hr'||(u.role==='leader'&&a.teamLeaderNik===u.nik)||(u.role==='karyawan'&&a.teamLeaderNik===u.leaderNik));
+  return state.agendas.filter(a=>a.scope!=='team'||u.role==='hr'||(u.role==='leader'&&sameId_(a.teamLeaderNik,u.nik))||(u.role==='karyawan'&&sameId_(a.teamLeaderNik,u.leaderNik)));
 }
 
 function renderAgendaTab(){
@@ -2789,7 +2800,7 @@ function hrSetTeamAgendaXp(id){const ag=state.agendas.find(a=>a.id===id&&a.scope
 function renderAgendaSubTabContent(){
   const container=document.getElementById('agendaSubTabContent');if(!container)return; const role=state.activeProfile.role;
   if(state.agendaSubTab==='team'&&role==='leader'){
-    const mine=state.agendas.filter(a=>a.scope==='team'&&a.teamLeaderNik===state.activeProfile.nik);
+    const mine=state.agendas.filter(a=>a.scope==='team'&&sameId_(a.teamLeaderNik,state.activeProfile.nik));
     container.innerHTML=`<div class="card" style="background:#eef2ff;border-color:#c7d2fe"><div style="font-weight:800;font-size:13px;margin-bottom:9px;color:#3730a3">➕ Buat Agenda Khusus Tim</div><label>Judul Agenda Tim</label><input id="teamAgendaTitle" placeholder="cth. Evaluasi Mingguan Tim Radar"><label>Tanggal</label><input type="date" id="teamAgendaDate"><label>Waktu</label><input id="teamAgendaTime" placeholder="09:00 WIB"><label>Lokasi / Media</label><input id="teamAgendaLoc" placeholder="Ruang Meeting / Google Meet"><div style="font-size:10.5px;color:#64748b;background:#fff;padding:9px 10px;border-radius:9px;margin:8px 0 10px">ℹ️ Leader hanya membuat agenda. Bonus XP, bila diperlukan, ditentukan oleh HR.</div><button class="btn" onclick="submitTeamAgenda()">👥 Kirim ke Anggota Tim</button></div><h2 class="section-title">Agenda Tim Saya</h2>${mine.length?mine.map(a=>`<div class="team-agenda-card"><span class="tag">KHUSUS TIM</span><div style="font-size:12px;font-weight:800">${a.title}</div><div style="font-size:10px;color:#64748b;margin-top:4px">📅 ${a.date} • ⏰ ${a.time} • 📍 ${a.location}</div>${a.hrXpBonus?`<div style="font-size:10px;color:#059669;margin-top:5px;font-weight:700">⭐ Reward HR: +${a.hrXpBonus} XP</div>`:`<div style="font-size:10px;color:#94a3b8;margin-top:5px">Reward XP belum ditetapkan HR</div>`}</div>`).join(''):'<div class="empty">Belum ada agenda tim.</div>'}`;return;
   }
   if(state.agendaSubTab==='agenda'){
@@ -2798,7 +2809,7 @@ function renderAgendaSubTabContent(){
   }
   if(state.agendaSubTab==='broadcast'&&role==='hr'){container.innerHTML=`<div class="card"><div style="font-weight:800;font-size:13px;margin-bottom:9px">📢 Broadcast Pengumuman</div><label>Pesan</label><textarea id="bcText" rows="3"></textarea><label>Durasi</label><select id="bcDuration"><option value="1">1 Hari</option><option value="3" selected>3 Hari</option><option value="7">7 Hari</option><option value="999">Permanen</option></select><button class="btn" onclick="submitBroadcast()">🚀 Broadcast</button></div>`;return;}
   // kegiatan
-  const isHr=role==='hr';container.innerHTML=`<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">${isHr?'✨ Catat Kegiatan HR (+XP)':'✨ Absen Kegiatan Tambahan (+XP)'}</div><label>Jenis Kegiatan</label><select id="actType" onchange="updateActXpButton()"><option value="pelatihan">🎓 Pelatihan & Workshop (+100 XP)</option><option value="gathering">🎉 Gathering (+50 XP)</option><option value="diskusi_tim">👥 Diskusi Tim (+40 XP)</option><option value="badminton">🏸 Olahraga (+30 XP)</option></select><label>Catatan</label><input id="actNote" placeholder="Catatan singkat"><button class="btn" id="btnSubmitAct" onclick="submitActivity()">✨ Catat Kegiatan (+100 XP)</button></div><h2 class="section-title">Riwayat Kegiatan Saya</h2><div class="card" id="actHistoryList"></div>`;renderActivityHistory();
+  const isHr=role==='hr';container.innerHTML=`<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">${isHr?'✨ Catat Kegiatan HR (+XP)':'✨ Absen Kegiatan Tambahan (+XP)'}</div><label>Jenis Kegiatan</label><select id="actType" onchange="updateActXpButton()"><option value="pelatihan">🎓 Pelatihan & Workshop (+100 XP)</option><option value="gathering">🎉 Gathering (+50 XP)</option>${isHr?'':'<option value="diskusi_4mata">💬 Diskusi 4 Mata dengan HR (+40 XP)</option>'}${isHr?'<option value="diskusi_4mata">💬 Diskusi 4 Mata (+50 XP)</option>':''}<option value="badminton">🏸 Olahraga (+30 XP)</option></select><label>Catatan</label><input id="actNote" placeholder="Catatan singkat"><button class="btn" id="btnSubmitAct" onclick="submitActivity()">✨ Catat Kegiatan (+100 XP)</button></div><h2 class="section-title">Riwayat Kegiatan Saya</h2><div class="card" id="actHistoryList"></div>`;renderActivityHistory();
 }
 
 function submitTeamAgenda(){
