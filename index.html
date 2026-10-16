@@ -1604,7 +1604,7 @@ async function resolveAgenda(agendaId, statusChoice) {
   const nik=String(state.activeProfile.nik), key=String(agendaId)+'_'+nik;
   if(state.agendaUserStatus[key]){showToast('Agenda ini sudah dikonfirmasi.');return;}
   const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-  const res=await gasCall('setAgendaStatus',{key,agendaId,nik,status:statusChoice,date});
+  const res=await gasCall('setAgendaStatus',{key,agendaId,nik,status:statusChoice,date,title:ag.title,agendaDate:ag.date,time:ag.time,location:ag.location,scope:ag.scope,teamLeaderNik:ag.teamLeaderNik||ag.team_leader_nik||''});
   if(!res||res.ok!==true){showToast('Gagal menyimpan konfirmasi agenda: '+(res?.message||res?.error||'periksa koneksi'));return;}
   state.agendaUserStatus[key]={status:statusChoice,date,time:new Date().toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}),xpAward:Number(res.xpAward)||0};
   localStorage.setItem('agenda_user_status_all',JSON.stringify(state.agendaUserStatus));
@@ -3500,7 +3500,7 @@ attendanceStatusStyle_=function(s){if(s==='Terlambat Briefing')return {color:'va
 
 <style id="v102Styles">
 #camVideo{transform:none!important}
-.v102-camera-tools{display:flex;gap:8px;margin:8px 0 10px}
+.v102-camera-tools{display:none!important}
 .v102-camera-tools button{flex:1;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:9px;font-size:11px;font-weight:800}
 .v102-tree details{border:1px solid #e2e8f0;border-radius:14px;margin:8px 0;background:#fff;overflow:hidden}
 .v102-tree summary{cursor:pointer;padding:12px 14px;font-weight:800;font-size:12px;background:#f8fafc;display:flex;justify-content:space-between;gap:8px}
@@ -3525,13 +3525,7 @@ startCamera=async function(){
     v102CameraTools();
   }catch(err){console.warn('Camera blocked/unavailable:',err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
 };
-function v102CameraTools(){
-  const slot=document.getElementById('cameraSlot'); if(!slot||slot.querySelector('.v102-camera-tools'))return;
-  const tools=document.createElement('div');tools.className='v102-camera-tools';
-  tools.innerHTML=`<button onclick="v102SetCamera('user')">🤳 Kamera Depan</button><button onclick="v102SetCamera('environment')">📷 Kamera Belakang</button>`;
-  const btn=document.getElementById('btnCapture'); slot.insertBefore(tools,btn);
-}
-function v102SetCamera(f){state.cameraFacing=f;startCamera();}
+function v102CameraTools(){const slot=document.getElementById('cameraSlot');if(!slot)return;slot.querySelectorAll('.v102-camera-tools').forEach(el=>el.remove());}
 /* Hasil canvas sengaja tidak dibalik: foto depan tersimpan sesuai orientasi nyata, bukan mirror. */
 capturePhotoDataUrl_=function(){
   const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');if(!video||!canvas||!video.videoWidth)return null;
@@ -3896,7 +3890,7 @@ function v104FormatDate(value, withTime=false){
   else d=new Date(raw);
   if(Number.isNaN(d.getTime()))return raw;
   const date=d.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
-  return withTime?date+' • '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):date;
+  const hasRealTime=Number(m[4]||0)!==0||Number(m[5]||0)!==0||Number(m[6]||0)!==0; return withTime&&hasRealTime?date+' • '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Jakarta'}):date;
 }
 // Tampilkan tanggal yang mudah dibaca pada antrean pengajuan libur Leader.
 const v104RenderLeaderLeavesInto=renderLeaderLeavesInto;
@@ -3909,6 +3903,24 @@ approveLeaderIdea=v104KeepLeaderPage(approveLeaderIdea);
 // Format ISO tanggal pada area laporan/catatan HR setelah dirender.
 const v104DateObserver=new MutationObserver(()=>{const root=document.getElementById('content');if(!root)return;root.querySelectorAll('.timeline-meta,.report-card,.decision-card').forEach(el=>{if(el.dataset.v104DatesDone)return;el.dataset.v104DatesDone='1';el.innerHTML=el.innerHTML.replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:?\d{2}\b/g,m=>v104FormatDate(m,true)).replace(/\b\d{4}-\d{2}-\d{2}\b/g,m=>v104FormatDate(m));});});
 if(document.getElementById('content'))v104DateObserver.observe(document.getElementById('content'),{childList:true,subtree:true});
+</script>
+
+
+<script id="v108CameraAgendaDateFix">
+// V10.8: remove duplicate camera selectors; preserve one set of original camera controls.
+(function(){
+  function removeDuplicateCameraControls(){
+    document.querySelectorAll('.v102-camera-tools').forEach(el=>el.remove());
+    const slot=document.getElementById('cameraSlot');
+    if(slot){
+      const controls=[...slot.querySelectorAll('.camera-controls')];
+      controls.slice(1).forEach(el=>el.remove());
+    }
+  }
+  document.addEventListener('DOMContentLoaded',removeDuplicateCameraControls);
+  const root=document.getElementById('content');
+  if(root)new MutationObserver(removeDuplicateCameraControls).observe(root,{childList:true,subtree:true});
+})();
 </script>
 
 </body>
