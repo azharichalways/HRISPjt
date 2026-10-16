@@ -2166,6 +2166,24 @@ function renderHRManagementPage() {
   const container = document.getElementById('hrManagementContent');
   container.innerHTML = `<div class="card" id="hrSubTabContent"></div>`;
   renderHRSubTabContent();
+  // V10.9 targeted fix: fetch the authoritative Users sheet for HR account management,
+  // instead of relying solely on a possibly stale/role-limited local cache.
+  (async () => {
+    const res = await gasCall('listUsers', {});
+    if (!res || !res.ok || !Array.isArray(res.users)) {
+      console.warn('listUsers gagal:', res && (res.error || res.message));
+      return;
+    }
+    state.allUsers = res.users.map(su => ({
+      ...su,
+      nik: idText_(su.nik),
+      kodeUnik: idText_(su.kodeUnik ?? su.kode_unik),
+      leaderNik: idText_(su.leaderNik ?? su.leader_nik),
+      role: idText_(su.role).toLowerCase()
+    }));
+    localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+    renderHRSubTabContent();
+  })();
 }
 
 function switchHRSubTab(sub) {
