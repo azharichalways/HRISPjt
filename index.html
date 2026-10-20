@@ -4005,3 +4005,54 @@ renderMonthlyReportPage=function(){v105OldLeaderMonthly();const c=document.getEl
 /* V10.6 policy note: XP is a signed reward balance; KPI is a separate 0-100 weighted performance score. */
 window.GEOFACЕ_POLICY_V10_6 = { xpMayBeNegative: true, kpiRange: [0,100], approvedLeaveStatus: 'Libur', approvedLeaveExcludedFromDiscipline: true };
 </script>
+
+<script id="v1012AttendancePresentation">
+/* V10.12: Kehadiran di Beranda, tampilan berwarna, filter bulan, dan cetak/Simpan PDF. */
+(function(){
+  const style=document.createElement('style');
+  style.textContent=`
+  .att-months{display:flex;gap:7px;overflow-x:auto;padding:3px 0 10px;scrollbar-width:thin}
+  .att-month{border:1px solid #dbe4f0;border-radius:22px;padding:8px 14px;background:#fff;color:#53657e;font-weight:700;white-space:nowrap}
+  .att-month.active{background:#2457d6;color:#fff;border-color:#2457d6}
+  .att-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+  .att-stat{padding:12px 7px;border-radius:15px;text-align:center;border:1px solid var(--att-border);background:var(--att-bg)}
+  .att-stat strong{display:block;font-size:22px;color:var(--att-color)}.att-stat span{font-size:11px;color:#64748b}
+  .att-record{border:1px solid var(--att-border);border-left:5px solid var(--att-color);background:#fff;border-radius:16px;padding:14px;margin:10px 0;break-inside:avoid}
+  .att-record-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .att-record-title{font-size:16px;font-weight:800;color:#182338}.att-record-meta{color:#64748b;font-size:12px;margin-top:7px;line-height:1.6}
+  .att-pill{display:inline-block;padding:5px 9px;border-radius:20px;background:var(--att-bg);color:var(--att-color);font-size:11px;font-weight:800;white-space:nowrap}
+  .att-actions{display:flex;gap:8px;margin:12px 0}.att-actions button{flex:1}
+  .att-green{--att-color:#13804a;--att-bg:#e8f8ef;--att-border:#b9e8cc}.att-yellow{--att-color:#a66a00;--att-bg:#fff7dc;--att-border:#f3df9b}.att-red{--att-color:#c52d35;--att-bg:#fff0f0;--att-border:#f2c2c4}.att-blue{--att-color:#2457d6;--att-bg:#edf4ff;--att-border:#c8dcff}.att-gray{--att-color:#596579;--att-bg:#f1f5f9;--att-border:#dce4ee}
+  @media print{body{background:#fff!important}.bottom-nav,#bottomNav,nav,.att-no-print,button,.btn{display:none!important}#content{padding:0!important;margin:0!important}.home-hero{box-shadow:none!important;border:1px solid #dbe4f0!important}.att-record{box-shadow:none!important;margin:8px 0!important}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  `;
+  document.head.appendChild(style);
+})();
+function attClassV1012(status){const s=String(status||'').toLowerCase();if(/alpha|terlambat masuk|tidak absen pulang|ditolak|pulang awal|gagal/.test(s))return 'att-red';if(/terlambat briefing|menunggu|pending|izin|libur/.test(s))return 'att-yellow';if(/tepat waktu|hadir|approved|disetujui/.test(s))return 'att-green';if(/system/.test(s))return 'att-gray';return 'att-blue';}
+function attTimeV1012(v){
+ if(v==null||v==='')return '-';
+ if(typeof v==='number'&&v>=0&&v<1){const m=Math.round(v*1440);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+ const s=String(v).trim();let m=s.match(/(?:1899-12-30[T ]|T)?(\d{1,2}):(\d{2})(?::\d{2})?/);if(m)return String(m[1]).padStart(2,'0')+':'+m[2];
+ const d=new Date(v);if(!isNaN(d)&&/1899|GMT|\d{4}-\d{2}-\d{2}T/.test(s))return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');return s;
+}
+function attDateV1012(v){const s=String(v||'');const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return `${Number(m[3])} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][Number(m[2])-1]} ${m[1]}`;return s;}
+const v1012OldHistory=renderAttendanceHistoryV1011;
+async function renderAttendanceHistoryV1011(monthFilter){
+ const c=document.getElementById('content');c.innerHTML='<div class="home-hero"><div class="title">Kehadiran Saya</div><div class="desc">Memuat data presensi dari server…</div></div>';
+ const res=await gasCall('getAttendanceHistory',{});if(!res||!res.ok){c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
+ const all=(res.records||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||attTimeV1012(b.time).localeCompare(attTimeV1012(a.time)));
+ const current=monthFilter||new Date().toISOString().slice(0,7);const months=[...new Set(all.map(r=>String(r.date||'').slice(0,7)).filter(x=>/^\d{4}-\d{2}$/.test(x)))];if(!months.includes(current)&&months.length)months.unshift(current);
+ const records=all.filter(r=>String(r.date||'').startsWith(current));
+ const statusOf=r=>String(r.status_text||r.status||'').trim();
+ const count=(re)=>records.filter(r=>re.test(statusOf(r))).length;
+ const attended=records.filter(r=>String(r.type||'').toLowerCase()==='masuk'&&/tepat waktu|terlambat|hadir/i.test(statusOf(r))&&!/alpha|tidak absen/i.test(statusOf(r))).length;
+ const leave=count(/libur|izin|cuti/i),problem=count(/alpha|terlambat|tidak absen|pulang awal/i);
+ const monthLabel=current?`${['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][Number(current.slice(5,7))-1]} ${current.slice(0,4)}`:'Kehadiran';
+ c.innerHTML=`<div id="attendancePrintArea"><div class="home-hero"><div class="eyebrow">PRESENSI</div><div class="title">Daftar Kehadiran Saya</div><div class="desc">${escAttV1011(monthLabel)} • ${records.length} catatan</div></div><div class="att-months att-no-print">${months.map(m=>`<button class="att-month ${m===current?'active':''}" onclick="renderAttendanceHistoryV1011('${m}')">${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][Number(m.slice(5,7))-1]} ${m.slice(0,4)}</button>`).join('')}</div><div class="att-summary"><div class="att-stat att-green"><strong>${attended}</strong><span>Hadir</span></div><div class="att-stat att-yellow"><strong>${leave}</strong><span>Izin / Libur</span></div><div class="att-stat att-red"><strong>${problem}</strong><span>Perlu perhatian</span></div></div><div class="att-actions att-no-print"><button class="btn secondary" onclick="printAttendancePDFV1012()">📄 Simpan PDF</button><button class="btn secondary" onclick="switchTab('home',true)">← Beranda</button></div>${records.length?records.map(r=>{const st=statusOf(r),cl=attClassV1012(st),typ=String(r.type||'system').toUpperCase();return `<article class="att-record ${cl}"><div class="att-record-head"><div><div class="att-record-title">${escAttV1011(attDateV1012(r.date))} • ${escAttV1011(typ)}</div><div class="att-record-meta">Jam <strong>${escAttV1011(attTimeV1012(r.time))}</strong> · Shift ${escAttV1011(r.shift||'—')}<br>XP ${Number(r.xp_earned||0)>0?'+':''}${Number(r.xp_earned||0)}</div></div><span class="att-pill">${escAttV1011(st||'Tercatat')}</span></div>${r.photo_url?`<p class="att-no-print"><a href="${escAttV1011(r.photo_url)}" target="_blank" rel="noopener">Lihat foto presensi</a></p>`:''}<button class="btn secondary att-no-print" style="width:100%;margin-top:10px" onclick="openAttendanceCorrectionV1011('${escAttV1011(r.id)}','${escAttV1011(attTimeV1012(r.time))}','${escAttV1011(r.shift||'pagi')}')">Ajukan koreksi</button></article>`}).join(''):'<div class="card">Belum ada catatan untuk bulan ini.</div>'}</div>`;
+}
+function printAttendancePDFV1012(){const title=document.title;document.title='Daftar Kehadiran Saya';window.print();document.title=title;}
+// Riwayat tidak lagi menjadi item navigasi bawah; Kehadiran tersedia di Beranda dekat Presensi.
+const v1012RenderBottomNav=renderBottomNav;
+renderBottomNav=function(){v1012RenderBottomNav();const nav=document.getElementById('bottomNav');if(!nav)return;nav.querySelectorAll('.navbtn').forEach(b=>{if(/riwayat/i.test(b.innerText))b.remove();});};
+const v1012RenderHome=renderHomeTab;
+renderHomeTab=function(){v1012RenderHome();const c=document.getElementById('content');if(!c||!state.activeProfile||state.activeProfile.role!=='karyawan')return;const grid=c.querySelector('.home-grid');if(!grid||grid.querySelector('[data-attendance-home]'))return;const tile=document.createElement('button');tile.className='home-tile';tile.setAttribute('data-attendance-home','1');tile.innerHTML='<div class="icon">📅</div><div class="title">Kehadiran</div><div class="desc">Lihat rekap bulanan, status warna, koreksi, dan simpan PDF.</div>';tile.onclick=()=>switchTab('attendance_history',true);const pres=grid.querySelector('button[onclick*="absen"]');if(pres&&pres.nextSibling)grid.insertBefore(tile,pres.nextSibling);else grid.appendChild(tile);};
+</script>
