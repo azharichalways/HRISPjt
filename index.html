@@ -3747,7 +3747,7 @@ const v1022GasCall=gasCall;
 gasCall=async function(action,payload={}){
   const active=document.activeElement,btn=active&&active.closest?active.closest('button,.btn,[role="button"]'):null;
   let oldDisabled=false;if(btn){oldDisabled=!!btn.disabled;btn.disabled=true;btn.classList.add('v1022-busy');}
-  const labels={addAttendance:'⏳ Memproses presensi…',sendPrivateMessage:'⏳ Mengirim pesan…',addAnnouncement:'⏳ Mengirim broadcast…',updateAnnouncement:'⏳ Menyimpan broadcast…',deleteAnnouncement:'⏳ Menghapus broadcast…',saveUser:'⏳ Menyimpan akun…',changeOwnPassword:'⏳ Mengubah password…',addLeave:'⏳ Mengirim pengajuan…',addIdea:'⏳ Mengirim ide…',addGoodDeed:'⏳ Mengirim kontribusi…',addAgenda:'⏳ Menyimpan agenda…'};
+  const labels={getAttendanceHistory:'⏳ Memuat riwayat…',requestAttendanceCorrection:'⏳ Mengirim koreksi…',getAttendanceCorrections:'⏳ Memuat pengajuan koreksi…',reviewAttendanceCorrection:'⏳ Menyimpan keputusan…',addAttendance:'⏳ Memproses presensi…',sendPrivateMessage:'⏳ Mengirim pesan…',addAnnouncement:'⏳ Mengirim broadcast…',updateAnnouncement:'⏳ Menyimpan broadcast…',deleteAnnouncement:'⏳ Menghapus broadcast…',saveUser:'⏳ Menyimpan akun…',changeOwnPassword:'⏳ Mengubah password…',addLeave:'⏳ Mengirim pengajuan…',addIdea:'⏳ Mengirim ide…',addGoodDeed:'⏳ Mengirim kontribusi…',addAgenda:'⏳ Menyimpan agenda…'};
   showToast(labels[action]||'⏳ Memproses…');
   try{const res=await v1022GasCall(action,payload);if(!res?.ok)showToast('❌ '+(res?.message||res?.error||'Proses gagal.'));return res;}
   catch(err){showToast('❌ '+(err?.message||'Terjadi kesalahan koneksi.'));throw err;}
@@ -3940,6 +3940,47 @@ if(document.getElementById('content'))v104DateObserver.observe(document.getEleme
   const root=document.getElementById('content');
   if(root)new MutationObserver(removeDuplicateCameraControls).observe(root,{childList:true,subtree:true});
 })();
+
+// V10.11: riwayat presensi server dan alur koreksi dengan audit trail.
+const v1011RenderBottomNav=renderBottomNav;
+renderBottomNav=function(){
+  v1011RenderBottomNav();
+  const nav=document.getElementById('bottomNav'); if(!nav||!state.activeProfile)return;
+  const role=String(state.activeProfile.role||'').toLowerCase();
+  const items=[{id:'attendance_history',label:'Riwayat',icon:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/>'}];
+  if(role==='leader'||role==='hr')items.push({id:'attendance_corrections',label:'Koreksi',icon:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4Z"/>'});
+  items.forEach(it=>{const b=document.createElement('button');b.className='navbtn '+(state.currentTab===it.id?'active':'');b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${it.icon}</svg><span>${it.label}</span>`;b.onclick=()=>switchTab(it.id,true);nav.appendChild(b);});
+};
+const v1011SwitchTab=switchTab;
+switchTab=function(tab,pushState=true){
+  if(tab!=='attendance_history'&&tab!=='attendance_corrections')return v1011SwitchTab(tab,pushState);
+  state.currentTab=tab;if(pushState)history.pushState({tab},'','#'+tab);stopCamera();renderBottomNav();
+  if(tab==='attendance_history')renderAttendanceHistoryV1011();else renderAttendanceCorrectionsV1011();
+};
+function escAttV1011(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function renderAttendanceHistoryV1011(){
+ const c=document.getElementById('content');c.innerHTML='<div class="home-hero"><div class="title">Riwayat Absensi Saya</div><div class="desc">Memuat data dari server…</div></div>';
+ const res=await gasCall('getAttendanceHistory',{ });if(!res||!res.ok){c.innerHTML=`<div class="card">Gagal memuat riwayat: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
+ const records=res.records||[];
+ c.innerHTML=`<div class="home-hero"><div class="eyebrow">Presensi</div><div class="title">Riwayat Absensi Saya</div><div class="desc">Data dari server • ${records.length} catatan terakhir</div></div>${records.length?records.map(r=>`<div class="card" style="margin-bottom:10px"><div class="timeline-top"><strong>${escAttV1011(r.date)} • ${escAttV1011(r.type||'-').toUpperCase()}</strong><span class="status-pill">${escAttV1011(r.status_text||'-')}</span></div><div class="timeline-desc">Jam ${escAttV1011(r.time||'-')} · Shift ${escAttV1011(r.shift||'-')} · XP ${escAttV1011(r.xp_earned||0)}</div>${r.photo_url?`<a href="${escAttV1011(r.photo_url)}" target="_blank" rel="noopener">Lihat foto presensi</a>`:''}<button class="btn secondary" style="margin-top:10px" onclick="openAttendanceCorrectionV1011('${escAttV1011(r.id)}','${escAttV1011(r.time||'')}','${escAttV1011(r.shift||'pagi')}')">Ajukan koreksi</button></div>`).join(''):'<div class="card">Belum ada catatan absensi pada server.</div>'}`;
+}
+function openAttendanceCorrectionV1011(id,time,shift){
+ const c=document.getElementById('content');c.innerHTML=`<div class="home-hero"><div class="title">Ajukan Koreksi Absensi</div><div class="desc">Catatan asli tetap disimpan. Perubahan baru diterapkan setelah disetujui.</div></div><div class="card"><label>Jam yang benar</label><input id="attCorrectionTime" type="time" value="${escAttV1011(time)}" required><label>Shift yang benar</label><select id="attCorrectionShift"><option value="pagi" ${shift==='pagi'?'selected':''}>Pagi 07.00–15.00</option><option value="middle" ${shift==='middle'?'selected':''}>Tengah 13.00–21.00</option><option value="sore" ${shift==='sore'?'selected':''}>Sore 15.00–23.00</option><option value="malam" ${shift==='malam'?'selected':''}>Malam 23.00–07.00</option></select><label>Alasan koreksi</label><textarea id="attCorrectionReason" rows="4" placeholder="Jelaskan kesalahan dan data yang benar (minimal 8 karakter)"></textarea><button class="btn" onclick="submitAttendanceCorrectionV1011('${escAttV1011(id)}')">Kirim Pengajuan</button><button class="btn secondary" onclick="switchTab('attendance_history',true)">Batal</button></div>`;
+}
+async function submitAttendanceCorrectionV1011(attendanceId){
+ const requestedTime=document.getElementById('attCorrectionTime')?.value||'',requestedShift=document.getElementById('attCorrectionShift')?.value||'',reason=document.getElementById('attCorrectionReason')?.value.trim()||'';
+ if(!requestedTime||reason.length<8){showToast('Isi jam yang benar dan alasan minimal 8 karakter.');return;}
+ const res=await gasCall('requestAttendanceCorrection',{attendanceId,requestedTime,requestedShift,reason});if(!res?.ok){showToast('Gagal mengirim: '+(res?.message||res?.error||'error'));return;}showToast(res.message||'Pengajuan terkirim.');renderAttendanceHistoryV1011();
+}
+async function renderAttendanceCorrectionsV1011(){
+ const c=document.getElementById('content'),role=String(state.activeProfile.role||'').toLowerCase();
+ c.innerHTML='<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">Memuat pengajuan dari server…</div></div>';
+ const res=await gasCall('getAttendanceCorrections',{});if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat: ${escAttV1011(res?.message||res?.error||'error')}</div>`;return;}
+ const list=(res.corrections||[]).filter(x=>x.status==='Pending');
+ c.innerHTML=`<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">${list.length} pengajuan menunggu keputusan.</div></div>${list.length?list.map(x=>`<div class="card" style="margin-bottom:10px"><strong>${escAttV1011(x.nama)} • ${escAttV1011(x.attendance_date)}</strong><div class="timeline-desc">Catatan ${escAttV1011(x.attendance_id)} · diminta ${escAttV1011(x.requested_time)} / shift ${escAttV1011(x.requested_shift)}</div><p>${escAttV1011(x.reason)}</p><label>Catatan peninjau</label><textarea id="attReviewNote_${escAttV1011(x.id)}" rows="2" placeholder="Catatan (opsional)"></textarea><div style="display:flex;gap:8px"><button class="btn" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Approved')">Setujui</button><button class="btn secondary" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Rejected')">Tolak</button></div></div>`).join(''):'<div class="card">Tidak ada pengajuan koreksi yang menunggu keputusan.</div>'}`;
+}
+async function reviewAttendanceCorrectionV1011(id,status){const note=document.getElementById('attReviewNote_'+id)?.value||'';const res=await gasCall('reviewAttendanceCorrection',{id,status,note});if(!res?.ok){showToast('Gagal: '+(res?.message||res?.error||'error'));return;}showToast(res.message||'Keputusan disimpan.');renderAttendanceCorrectionsV1011();}
+
 </script>
 
 </body>
