@@ -4107,9 +4107,23 @@ function attStatusClassV1013(r){const s=String(r.status_text||r.status||'').toLo
 function attStatusColorV1013(cls){return ({good:['#e8f8ef','#b9e8cc','#13804a'],late:['#fff7dc','#f3df9b','#a66a00'],alpha:['#fff0f0','#f2bfc2','#c52d35'],bad:['#fff0f0','#f2bfc2','#c52d35'],leave:['#fff7dc','#f3df9b','#a66a00'],neutral:['#f1f5f9','#dce4ee','#596579']})[cls]||['#f1f5f9','#dce4ee','#596579'];}
 function attMonthLabelV1013(m){return ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][Number(m.slice(5,7))-1]+' '+m.slice(0,4);}
 function attRenderDayDetailV1013(date,records){const c=document.getElementById('attDateDetail');if(!c)return;const list=records.filter(r=>attDateKeyV1013(r.date)===date).sort((a,b)=>attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));if(!list.length){c.innerHTML='<div class="att-detail">Tidak ada catatan pada tanggal ini.</div>';return;}c.innerHTML=`<div class="att-detail"><h3>Detail ${escAttV1011(attDateV1012(date))}</h3>${list.map(r=>{const st=String(r.status_text||r.status||'Tercatat'),cl=attStatusClassV1013(r),co=attStatusColorV1013(cl);return `<div style="border-left:4px solid ${co[2]};padding:8px 9px;margin:7px 0;background:${co[0]};border-radius:7px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><strong>${escAttV1011(String(r.type||'system').toUpperCase())}</strong><span style="font-size:11px;font-weight:800;color:${co[2]}">${escAttV1011(st)}</span></div><div class="att-detail-row"><span>Jam</span><strong>${escAttV1011(attTimeV1012(r.time))}</strong></div><div class="att-detail-row"><span>Shift</span><strong>${escAttV1011(r.shift||'—')}</strong></div><div class="att-detail-row"><span>XP</span><strong>${Number(r.xp_earned||0)>0?'+':''}${Number(r.xp_earned||0)}</strong></div>${r.photo_url?`<div style="margin-top:6px"><a href="${escAttV1011(r.photo_url)}" target="_blank" rel="noopener">Lihat foto presensi</a></div>`:''}</div>`}).join('')}</div>`;}
+// V10.15: cache in-memory + prefetch agar halaman kehadiran langsung tampil saat dibuka.
+let attHistoryCacheV1015={nik:'',records:null,at:0,promise:null};
+function attHistoryNikV1015(){return String(state.activeProfile?.nik||'');}
+async function loadAttendanceHistoryV1015(force=false){
+ const nik=attHistoryNikV1015(),fresh=attHistoryCacheV1015.nik===nik&&Array.isArray(attHistoryCacheV1015.records)&&(Date.now()-attHistoryCacheV1015.at<45000);
+ if(!force&&fresh)return {ok:true,records:attHistoryCacheV1015.records,cached:true};
+ if(attHistoryCacheV1015.nik===nik&&attHistoryCacheV1015.promise&&!force)return attHistoryCacheV1015.promise;
+ attHistoryCacheV1015={nik,records:attHistoryCacheV1015.nik===nik?attHistoryCacheV1015.records:null,at:attHistoryCacheV1015.at,promise:null};
+ const promise=(async()=>{const res=await gasCall('getAttendanceHistory',{});if(res?.ok){attHistoryCacheV1015={nik,records:Array.isArray(res.records)?res.records:[],at:Date.now(),promise:null};}else{attHistoryCacheV1015.promise=null;}return res;})();
+ attHistoryCacheV1015.promise=promise;return promise;
+}
+function prefetchAttendanceHistoryV1015(){if(!attHistoryNikV1015())return;loadAttendanceHistoryV1015(false).catch(()=>{});}
 async function renderAttendanceHistoryV1011(monthFilter,selectedDate){
- const c=document.getElementById('content');c.innerHTML='<div class="home-hero"><div class="title">Kehadiran Saya</div><div class="desc">Memuat kalender dari server…</div></div>';
- const res=await gasCall('getAttendanceHistory',{});if(!res||!res.ok){c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
+ const c=document.getElementById('content');if(!c)return;
+ const cached=attHistoryCacheV1015.nik===attHistoryNikV1015()&&Array.isArray(attHistoryCacheV1015.records);
+ if(!cached)c.innerHTML='<div class="home-hero"><div class="title">Kehadiran Saya</div><div class="desc">Memuat data pertama kali…</div></div>';
+ const res=await loadAttendanceHistoryV1015(false);if(!res||!res.ok){if(!cached)c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
  const all=(res.records||[]).slice().sort((a,b)=>attDateKeyV1013(a.date).localeCompare(attDateKeyV1013(b.date))||attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));
  const today=new Date();const current=monthFilter||`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;const records=all.filter(r=>attDateKeyV1013(r.date).startsWith(current));
  const groups={};records.forEach(r=>{const d=attDateKeyV1013(r.date);if(d)(groups[d]||(groups[d]=[])).push(r);});
@@ -4126,4 +4140,11 @@ function printAttendancePDFV1013(month){const area=document.getElementById('atte
 // V10.13: remove correction UI entirely; correction endpoints/data remain untouched for audit compatibility.
 const v1013OldBottomNav=renderBottomNav;renderBottomNav=function(){v1013OldBottomNav();const nav=document.getElementById('bottomNav');if(nav)nav.querySelectorAll('.navbtn').forEach(b=>{if(/riwayat|koreksi/i.test(b.innerText))b.remove();});};
 const v1013OldRenderHome=renderHomeTab;renderHomeTab=function(){v1013OldRenderHome();const c=document.getElementById('content');if(!c||!state.activeProfile||state.activeProfile.role!=='karyawan')return;const grid=c.querySelector('.home-grid');if(!grid)return;const tile=grid.querySelector('[data-attendance-home]');if(tile){const desc=tile.querySelector('.desc');if(desc)desc.textContent='Kalender, detail harian, dan laporan PDF.';return;}const t=document.createElement('button');t.className='home-tile';t.dataset.attendanceHome='1';t.innerHTML='<div class="icon">📅</div><div class="title">Kehadiran</div><div class="desc">Kalender, detail harian, dan laporan PDF.</div>';t.onclick=()=>switchTab('attendance_history',true);const pres=grid.querySelector('button[onclick*="absen"]');if(pres&&pres.nextSibling)grid.insertBefore(t,pres.nextSibling);else grid.appendChild(t);};
+
+// Prefetch saat Beranda dirender; permintaan berjalan di latar belakang sehingga klik Kehadiran berikutnya cepat.
+const v1015PrevRenderHome=renderHomeTab;
+renderHomeTab=function(){v1015PrevRenderHome();prefetchAttendanceHistoryV1015();};
+// Invalidate cache after attendance mutation so next view never keeps an old status.
+const v1015PrevGasCall=gasCall;
+gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(action,payload);if(['addAttendance','reviewAttendanceCorrection','requestAttendanceCorrection'].includes(action)&&res?.ok){attHistoryCacheV1015={nik:'',records:null,at:0,promise:null};}return res;};
 </script>
