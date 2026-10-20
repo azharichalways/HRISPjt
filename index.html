@@ -2783,6 +2783,7 @@ async function capturePhotoAndAbsen(){
   }
 
   const r=res.record;
+  if(res.warning) showToast('⚠️ '+res.warning);
   state.activeProfile={...state.activeProfile,...res.user};
   sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));
   const localRecord={id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:r.lat,lng:r.lng,xpEarned:num_(r.xp_earned),role:r.role,photo:capturedPhoto,photoUrl:r.photo_url};
