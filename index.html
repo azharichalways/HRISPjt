@@ -3981,6 +3981,28 @@ async function renderAttendanceCorrectionsV1011(){
 }
 async function reviewAttendanceCorrectionV1011(id,status){const note=document.getElementById('attReviewNote_'+id)?.value||'';const res=await gasCall('reviewAttendanceCorrection',{id,status,note});if(!res?.ok){showToast('Gagal: '+(res?.message||res?.error||'error'));return;}showToast(res.message||'Keputusan disimpan.');renderAttendanceCorrectionsV1011();}
 
+
+// V10.14: expose the personal attendance calendar on Employee, Leader, and HR home dashboards.
+function v1014EnsureAttendanceTile(){
+  const profile=state&&state.activeProfile;
+  const c=document.getElementById('content');
+  if(!profile||!c||!['karyawan','leader','hr'].includes(String(profile.role||'').toLowerCase()))return;
+  const grid=c.querySelector('.home-grid');
+  if(!grid||grid.querySelector('[data-attendance-home]'))return;
+  const tile=document.createElement('button');
+  tile.className='home-tile';tile.dataset.attendanceHome='1';
+  tile.innerHTML='<div class="icon">📅</div><div class="title">Kehadiran Saya</div><div class="desc">Kalender pribadi, detail harian, dan laporan PDF.</div>';
+  tile.onclick=()=>switchTab('attendance_history',true);
+  const pres=[...grid.querySelectorAll('button')].find(b=>/presensi|absen/i.test(b.innerText||''));
+  if(pres&&pres.parentElement===grid)pres.insertAdjacentElement('afterend',tile);else grid.appendChild(tile);
+}
+const v1014OldRenderHome=renderHomeTab;
+renderHomeTab=function(){v1014OldRenderHome();v1014EnsureAttendanceTile();};
+const v1014OldRenderLeaderDashboard=renderLeaderDashboard;
+renderLeaderDashboard=function(){v1014OldRenderLeaderDashboard();v1014EnsureAttendanceTile();};
+const v1014OldRenderHRDashboard=renderHRDashboard;
+renderHRDashboard=function(){v1014OldRenderHRDashboard();v1014EnsureAttendanceTile();};
+
 </script>
 
 </body>
