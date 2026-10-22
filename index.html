@@ -2726,7 +2726,7 @@ function renderAbsenTab(){
   c.innerHTML=`<div id="locationBadge" class="location-badge invalid"><span>📍</span> Memeriksa Lokasi GPS...</div>
     ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Hari libur HR tidak mengurangi XP atau Skor KPI.</span></div>`:`
     <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>
-    ${isHr?`<h2 class="section-title">Shift HR</h2><div class="shift-picker"><div style="padding:10px 12px;font-size:12px;font-weight:800">Pagi • Senin–Jumat <span class="shift-current">${HR_WORK_SHIFT.start}–${HR_WORK_SHIFT.end}</span></div></div>`:`<h2 class="section-title">Shift Kerja</h2><details class="shift-picker" id="shiftPicker"><summary><span>Pilih shift secara sadar</span><span class="shift-current">${shift.label} · ${shift.start}–${shift.end}　⌄</span></summary><div class="shift-grid">${Object.entries(SHIFTS).map(([k,s])=>`<button type="button" class="shift-tile ${state.selectedShift===k?'selected':''}" onclick="selectShift('${k}')"><div class="label">${s.label}</div><div class="time mono">${s.start} - ${s.end}</div></button>`).join('')}</div></details>`}
+    ${isHr?`<h2 class="section-title">Shift HR</h2><div class="shift-picker"><div style="padding:10px 12px;font-size:12px;font-weight:800">Pagi • Senin–Jumat <span class="shift-current">${HR_WORK_SHIFT.start}–${HR_WORK_SHIFT.end}</span></div></div>`:`<h2 class="section-title">Shift Kerja</h2><div class="shift-picker" style="padding:12px;font-size:12px;font-weight:700">🗓️ Shift ditentukan otomatis dari jadwal karyawan terbaru.</div>`}
     <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button><div class="camera-controls"><button class="btn secondary" type="button" onclick="switchCameraFacing('user')">🤳 Kamera Depan</button><button class="btn secondary" type="button" onclick="switchCameraFacing('environment')">📷 Kamera Belakang</button></div></div><div id="resultSlot"></div>`}`;
   updateLocationBadgeUI(); if(!off)startCamera();
 }
@@ -3860,16 +3860,14 @@ capturePhotoAndAbsen = function(){
   const isHr=state.activeProfile.role==='hr';
   if(isHr&&isHRNonWorkingDay()){showToast('🏖️ Hari libur HR tidak memengaruhi XP atau KPI.');return;}
   if(isHr)state.selectedShift='pagi';
-  if(state.selectedShift!=='malam'){
-    if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
-    if(state.distanceToOffice>(state.officeConfig?.maxDistance||300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas ${state.officeConfig?.maxDistance||300}m.`);return;}
-  }
+  if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
+  if(state.distanceToOffice>(state.officeConfig?.maxDistance||300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas ${state.officeConfig?.maxDistance||300}m.`);return;}
   const photo=capturePhotoDataUrl_();if(!photo){showToast('⚠️ Foto belum siap. Pastikan kamera aktif.');return;}
   const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Foto diambil • menyimpan di latar belakang…';}
   const slot=document.getElementById('cameraSlot');
   // UI langsung merespons setelah capture; proses Drive/Sheets berjalan asynchronous.
   if(slot)slot.innerHTML=`<div class="card" style="text-align:center;padding:12px"><img src="${photo}" alt="Pratinjau foto presensi" style="width:min(100%,220px);aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid #cbd5e1"><div style="font-weight:800;margin-top:8px">📸 Foto berhasil diambil</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Presensi sedang disimpan. Jangan tutup aplikasi dulu.</div><div class="v1022-busy" style="margin:10px auto;width:24px;height:24px;border:3px solid #dbeafe;border-top-color:#2563eb;border-radius:50%"></div></div>`;
-  const payload={id:'ATT-'+Date.now()+'-'+String(state.activeProfile.nik),shift:isHr?'pagi':state.selectedShift,type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,photoBase64:photo};
+  const payload={id:'ATT-'+Date.now()+'-'+String(state.activeProfile.nik),type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,accuracy:state.coords.accuracy||0,photoBase64:photo};
   gasCall('addAttendance',payload).then(res=>{
     if(!res||!res.ok){showToast('⛔ '+(res?.message||res?.error||'Presensi gagal disimpan. Silakan coba kembali.'));if(slot)slot.innerHTML=`<div class="card rejected-border" style="text-align:center"><div style="font-weight:800">Presensi belum tersimpan</div><img src="${photo}" alt="Foto yang diambil" style="width:100px;height:130px;object-fit:cover;border-radius:10px;margin:8px auto"><button class="btn" onclick="renderAbsenTab()">Coba Lagi</button></div>`;return;}
     const r=res.record;state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));
