@@ -1202,9 +1202,14 @@ function selectShift(s) {
    Preview dan foto tersimpan = bingkai asli kamera (tanpa crop CSS, tanpa digital zoom, tanpa transform bawaan).
    Sebagian perangkat mengirim stream kamera depan yang sudah terbalik dari sistem; tombol "Balik Kiri-Kanan"
    menyamakan preview DAN foto yang disimpan, dan pilihannya diingat per jenis kamera (depan/belakang). */
-function camIsFlipped_(){ return false; } // Tidak ada pembalikan: preview & foto = frame asli kamera.
+function camIsFlipped_(){
+  // Kamera depan ditampilkan seperti cermin (sama dengan aplikasi kamera bawaan HP); kamera belakang apa adanya.
+  // Foto yang disimpan mengikuti preview persis (apa yang terlihat = apa yang tersimpan).
+  if(typeof state.camFront==='boolean')return state.camFront;
+  return (state.cameraFacing||'user')==='user';
+}
 function camApplyView_(){
-  const v=document.getElementById('camVideo'); if(v)v.style.transform='none';
+  const v=document.getElementById('camVideo'); if(v)v.style.transform=camIsFlipped_()?'scaleX(-1)':'none';
 }
 function toggleCameraFlip(){ /* dinonaktifkan: hasil harus sama dengan kamera asli */ }
 try{localStorage.removeItem('cam_flip_user');localStorage.removeItem('cam_flip_environment');}catch(_){}
@@ -1230,11 +1235,13 @@ async function startCamera(){
   const video=document.getElementById('camVideo'); if(!video)return;
   if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){showToast('⚠️ Browser tidak mendukung kamera.');return;}
   const seq=state.camSeq=(state.camSeq||0)+1;
+  state.camFront=undefined;
   camApplyView_();
   try{
     const stream=await camOpenStream_(state.cameraFacing||'user');
     if(seq!==state.camSeq||!document.body.contains(video)){stream.getTracks().forEach(t=>t.stop());return;}
     state.stream=stream; video.srcObject=stream;
+    try{const fm=(stream.getVideoTracks()[0].getSettings()||{}).facingMode; if(fm==='user')state.camFront=true; else if(fm==='environment')state.camFront=false;}catch(_){}
     camApplyView_();
     await camResetZoom_(stream);
     await video.play().catch(()=>{});
@@ -1251,7 +1258,8 @@ function capturePhotoDataUrl_(){
   const ratio=Math.min(1,960/Math.max(video.videoWidth,video.videoHeight)); // hanya diperkecil proporsional
   canvas.width=Math.max(1,Math.round(video.videoWidth*ratio)); canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
   const ctx=canvas.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,0,0,canvas.width,canvas.height); // frame asli, tanpa mirror/flip/crop
+  if(camIsFlipped_()){ctx.translate(canvas.width,0);ctx.scale(-1,1);} // sama dengan preview
+  ctx.drawImage(video,0,0,canvas.width,canvas.height); ctx.setTransform(1,0,0,1,0,0);
   try{return canvas.toDataURL('image/jpeg',0.8);}catch(err){console.warn('Gagal mengambil foto:',err);return null;}
 }
 
@@ -3538,11 +3546,13 @@ initLocationWatcher=function(){
 };
 
 capturePhotoDataUrl_=function(){
-  // Final: foto = frame asli kamera (depan/belakang), tanpa mirror, tanpa crop, tanpa digital zoom.
+  // Final: foto = persis preview (depan: cermin seperti kamera bawaan, belakang: apa adanya), tanpa crop/zoom.
   const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');if(!video||!canvas||!video.videoWidth||!video.videoHeight)return null;
   const ratio=Math.min(1,960/Math.max(video.videoWidth,video.videoHeight));
   canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
-  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(camIsFlipped_()){ctx.translate(canvas.width,0);ctx.scale(-1,1);}
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);ctx.setTransform(1,0,0,1,0,0);
   try{return canvas.toDataURL('image/jpeg',0.8);}catch(_){return null;}
 };
 
@@ -4086,7 +4096,7 @@ label{margin-bottom:2px}
 #content.presensi-compact #resultSlot:empty{display:none}
 #content.presensi-compact #cameraSlot{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px}
 #cameraSlot .camera-wrap{position:relative;flex:1 1 auto;min-height:150px;width:100%;margin:0;border-radius:12px;overflow:hidden;background:#0f172a;border:1px solid #1e293b}
-#cameraSlot #camVideo{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain;transform:none!important}
+#cameraSlot #camVideo{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
 #cameraSlot #camCanvas{display:none}
 #cameraSlot .cam-tools{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:6px;z-index:2}
 .cam-ico{width:34px;height:34px;border-radius:50%;border:0;background:rgba(15,23,42,.55);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
