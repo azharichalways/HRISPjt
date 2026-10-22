@@ -728,7 +728,7 @@ const INITIAL_USERS = [
 
 const INITIAL_AGENDAS = [
   { id: 101, title: 'Training Customer Delight', date: '2026-09-15', time: '09:00 WIB', location: 'Hall Utama', xpBonus: 100 },
-  { id: 102, title: 'Badminton Rutin Mingguan', date: '2026-09-18', time: '17:00 WIB', location: 'Gor Telesindo', xpBonus: 30 },
+  { id: 102, title: 'Badminton Rutin', date: '2026-09-18', time: '17:00 WIB', location: 'Gor Telesindo', xpBonus: 30 },
   { id: 103, title: 'Diskusi 4 Mata dengan HR', date: '2026-09-22', time: '14:00 WIB', location: 'Ruang HR', xpBonus: 50 }
 ];
 
@@ -1373,13 +1373,13 @@ function renderAgendaSubTabContent() {
             <option value="diskusi_4mata">💬 Mengadakan Diskusi 4 Mata (+50 XP)</option>
             <option value="diskusi_tim">👥 Mengadakan Diskusi Tim (+50 XP)</option>
             <option value="gathering">🎉 Mengadakan Gathering Perusahaan (+50 XP)</option>
-            <option value="badminton">🏸 Mengadakan Olahraga / Badminton Tim (+30 XP)</option>
+            <option value="badminton">🏸 Mengadakan Badminton Rutin (+30 XP)</option>
           ` : `
             <option value="pelatihan">🎓 Hadir Pelatihan & Workshop (+100 XP)</option>
             <option value="gathering">🎉 Gathering Perusahaan (+50 XP)</option>
             <option value="diskusi_4mata">💬 Diskusi 4 Mata dengan HR (+40 XP)</option>
             <option value="diskusi_tim">👥 Diskusi Tim dengan HR (+40 XP)</option>
-            <option value="badminton">🏸 Olahraga / Badminton Tim (+30 XP)</option>
+            <option value="badminton">🏸 Badminton Rutin (+30 XP)</option>
           `}
         </select>
 
@@ -1600,19 +1600,36 @@ function renderAgendaList() {
 }
 
 async function resolveAgenda(agendaId, statusChoice) {
-  const ag=state.agendas.find(a=>String(a.id)===String(agendaId)); if(!ag)return;
-  const nik=String(state.activeProfile.nik), key=String(agendaId)+'_'+nik;
-  if(state.agendaUserStatus[key]){showToast('Agenda ini sudah dikonfirmasi.');return;}
-  const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
-  const res=await gasCall('setAgendaStatus',{key,agendaId,nik,status:statusChoice,date,title:ag.title,agendaDate:ag.date,time:ag.time,location:ag.location,scope:ag.scope,teamLeaderNik:ag.teamLeaderNik||ag.team_leader_nik||''});
-  if(!res||res.ok!==true){showToast('Gagal menyimpan konfirmasi agenda: '+(res?.message||res?.error||'periksa koneksi'));return;}
-  state.agendaUserStatus[key]={status:statusChoice,date,time:new Date().toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}),xpAward:Number(res.xpAward)||0};
-  localStorage.setItem('agenda_user_status_all',JSON.stringify(state.agendaUserStatus));
-  if(res.user){state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));}
-  updateGamifyBar();
-  if(Number(res.xpAward)>0){fireConfetti();showToast(`Konfirmasi agenda tersimpan • +${res.xpAward} XP`);}
-  else showToast('Konfirmasi agenda berhasil disimpan.');
-  renderAgendaTab();
+  const ag = (state.agendas || []).find(a => String(a.id) === String(agendaId));
+  if (!ag) { showToast('Agenda tidak ditemukan. Muat ulang aplikasi.'); return; }
+  const nik = String(state.activeProfile?.nik || '').trim();
+  if (!nik) { showToast('Sesi pengguna tidak ditemukan. Silakan login ulang.'); return; }
+  if (!['mengikuti','tidak'].includes(statusChoice)) { showToast('Pilihan konfirmasi tidak valid.'); return; }
+  const key = String(agendaId) + '_' + nik;
+  if (state.agendaUserStatus?.[key]) { showToast('Agenda ini sudah dikonfirmasi.'); return; }
+  const buttons = [...document.querySelectorAll(`button[onclick*="resolveAgenda(${JSON.stringify(String(agendaId))}"]`)];
+  buttons.forEach(b => { b.disabled = true; });
+  const date = (typeof v6LocalIso === 'function') ? v6LocalIso() : new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+  try {
+    const res = await gasCall('setAgendaStatus', {
+      key, agendaId:String(agendaId), nik, status:statusChoice, date,
+      title:String(ag.title||''), agendaDate:String(ag.date||''), time:String(ag.time||''),
+      location:String(ag.location||''), scope:String(ag.scope||'company'),
+      teamLeaderNik:String(ag.teamLeaderNik||ag.team_leader_nik||ag.creatorNik||ag.created_by||'')
+    });
+    if (!res || res.ok !== true) throw new Error(res?.message || res?.error || 'Server tidak mengonfirmasi penyimpanan.');
+    if (!state.agendaUserStatus) state.agendaUserStatus = {};
+    state.agendaUserStatus[key] = {status:statusChoice,date,time:new Date().toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}),xpAward:Number(res.xpAward)||0};
+    localStorage.setItem('agenda_user_status_all', JSON.stringify(state.agendaUserStatus));
+    if (res.user) { state.activeProfile = {...state.activeProfile,...res.user}; sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile)); }
+    updateGamifyBar();
+    if (Number(res.xpAward)>0) { fireConfetti(); showToast(`Konfirmasi agenda tersimpan • +${res.xpAward} XP`); }
+    else showToast('Konfirmasi agenda berhasil disimpan.');
+    renderAgendaTab();
+  } catch (err) {
+    showToast('Gagal menyimpan konfirmasi agenda: ' + (err.message || err));
+    buttons.forEach(b => { b.disabled = false; });
+  }
 }
 
 function submitBroadcast() {
@@ -2828,7 +2845,7 @@ function renderAgendaSubTabContent(){
   }
   if(state.agendaSubTab==='broadcast'&&role==='hr'){container.innerHTML=`<div class="card"><div style="font-weight:800;font-size:13px;margin-bottom:9px">📢 Broadcast Pengumuman</div><label>Pesan</label><textarea id="bcText" rows="3"></textarea><label>Durasi</label><select id="bcDuration"><option value="1">1 Hari</option><option value="3" selected>3 Hari</option><option value="7">7 Hari</option><option value="999">Permanen</option></select><button class="btn" onclick="submitBroadcast()">🚀 Broadcast</button></div>`;return;}
   // kegiatan
-  const isHr=role==='hr';container.innerHTML=`<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">${isHr?'✨ Catat Kegiatan HR (+XP)':'✨ Absen Kegiatan Tambahan (+XP)'}</div><label>Jenis Kegiatan</label><select id="actType" onchange="updateActXpButton()"><option value="pelatihan">🎓 Pelatihan & Workshop (+100 XP)</option><option value="gathering">🎉 Gathering (+50 XP)</option>${isHr?'':'<option value="diskusi_4mata">💬 Diskusi 4 Mata dengan HR (+40 XP)</option>'}${isHr?'<option value="diskusi_4mata">💬 Diskusi 4 Mata (+50 XP)</option>':''}<option value="badminton">🏸 Olahraga (+30 XP)</option></select><label>Catatan</label><input id="actNote" placeholder="Catatan singkat"><button class="btn" id="btnSubmitAct" onclick="submitActivity()">✨ Catat Kegiatan (+100 XP)</button></div><h2 class="section-title">Riwayat Kegiatan Saya</h2><div class="card" id="actHistoryList"></div>`;renderActivityHistory();
+  const isHr=role==='hr';container.innerHTML=`<div class="card"><div style="font-weight:700;font-size:13px;margin-bottom:10px">${isHr?'✨ Catat Kegiatan HR (+XP)':'✨ Absen Kegiatan Tambahan (+XP)'}</div><label>Jenis Kegiatan</label><select id="actType" onchange="updateActXpButton()"><option value="pelatihan">🎓 Pelatihan & Workshop (+100 XP)</option><option value="gathering">🎉 Gathering (+50 XP)</option>${isHr?'':'<option value="diskusi_4mata">💬 Diskusi 4 Mata dengan HR (+40 XP)</option>'}${isHr?'<option value="diskusi_4mata">💬 Diskusi 4 Mata (+50 XP)</option>':''}<option value="badminton">🏸 Badminton Rutin (+30 XP)</option></select><label>Catatan</label><input id="actNote" placeholder="Catatan singkat"><button class="btn" id="btnSubmitAct" onclick="submitActivity()">✨ Catat Kegiatan (+100 XP)</button></div><h2 class="section-title">Riwayat Kegiatan Saya</h2><div class="card" id="actHistoryList"></div>`;renderActivityHistory();
 }
 
 function submitTeamAgenda(){
@@ -4003,6 +4020,46 @@ renderHRDashboard=function(){v1014OldRenderHRDashboard();v1014EnsureAttendanceTi
 
 </script>
 
+
+<script id="geofaceUiCleanupAndAgendaFix">
+(function(){
+  // Sembunyikan seluruh pintu masuk fitur pengajuan libur dari tampilan; data lama tetap aman di server.
+  const leaveLabels = /pengajuan libur|monitor pengajuan libur|jadwal libur anggota|libur pribadi leader/i;
+  function hideLeaveUi(){
+    const root=document.getElementById('content'); if(!root)return;
+    root.querySelectorAll('button,a,[role="button"],.home-tile,.leader-action,.subnav-btn').forEach(el=>{
+      const t=(el.innerText||el.textContent||'').replace(/\s+/g,' ').trim();
+      if(!t || !leaveLabels.test(t))return;
+      if(el.classList.contains('leader-action') || el.classList.contains('home-tile') || el.matches('button,a,[role="button"],.subnav-btn')) el.remove();
+    });
+    root.querySelectorAll('[onclick*="showLeaderSection(\'leaves\')"],[onclick*="renderHRLeaveOverview"],[onclick*="switchTab(\'libur"],[data-v103-leaves],[data-v101-leave]').forEach(el=>el.remove());
+    // Remove stale HR workflow row for leave requests.
+    root.querySelectorAll('.leader-action').forEach(el=>{if(/pengajuan libur/i.test(el.innerText||''))el.remove();});
+  }
+  const oldRenderAgendaSubTabContent=window.renderAgendaSubTabContent;
+  if(typeof oldRenderAgendaSubTabContent==='function'){
+    window.renderAgendaSubTabContent=function(){
+      oldRenderAgendaSubTabContent.apply(this,arguments);
+      const type=document.getElementById('actType');
+      if(type){[...type.options].forEach(o=>{if(o.value==='badminton')o.text=o.text.replace(/Olahraga(?: \/ Badminton Tim)?/i,'Badminton Rutin');});}
+      hideLeaveUi();
+    };
+  }
+  ['renderLeaderDashboard','renderHRDashboard','renderAgendaTab','renderHRLeaveOverviewV103','renderLeaderLeaves','renderLeaderLeavesInto'].forEach(name=>{
+    const original=window[name]; if(typeof original!=='function')return;
+    if(name==='renderHRLeaveOverviewV103'){
+      window[name]=function(){showToast('Menu Monitor Pengajuan Libur sudah dinonaktifkan.');if(typeof switchTab==='function')switchTab('home',true);};
+    } else if(name==='renderLeaderLeaves'||name==='renderLeaderLeavesInto'){
+      window[name]=function(){const el=arguments[0]?document.getElementById(arguments[0]):document.getElementById('leaderLeavesList');if(el)el.innerHTML='<div class="empty">Fitur pengajuan libur sudah dinonaktifkan. Jadwal mengikuti spreadsheet shift.</div>';};
+    } else {
+      window[name]=function(){const r=original.apply(this,arguments);hideLeaveUi();return r;};
+    }
+  });
+  const obs=new MutationObserver(hideLeaveUi);
+  document.addEventListener('DOMContentLoaded',()=>{const root=document.getElementById('content');if(root)obs.observe(root,{childList:true,subtree:true});hideLeaveUi();});
+  setTimeout(hideLeaveUi,0);
+})();
+</script>
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
