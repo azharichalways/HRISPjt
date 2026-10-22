@@ -4078,39 +4078,60 @@ renderHRDashboard=function(){v1014OldRenderHRDashboard();v1014EnsureAttendanceTi
 
 <!-- V10.16 HOTFIX: Leader Kegiatan, agenda RSVP persistence feedback, camera framing parity -->
 <style id="v1016CameraNoMirrorNoZoom">
-  #cameraSlot .camera-wrap { aspect-ratio:auto!important; width:min(100%,360px)!important; height:auto!important; max-height:none!important; overflow:hidden; background:#111827; }
-  #cameraSlot #camVideo { display:block!important; width:100%!important; height:auto!important; max-height:60dvh!important; aspect-ratio:auto!important; object-fit:contain!important; object-position:center center!important; transform:none!important; }
+  /* Preview kamera: bingkai asli, tanpa mirror, tanpa crop/zoom */
+  #cameraSlot .camera-wrap { aspect-ratio:auto!important; width:min(100%,360px)!important; height:auto!important; max-height:none!important; overflow:hidden; background:#111827; margin-left:auto!important; margin-right:auto!important; }
+  #cameraSlot #camVideo { display:block!important; width:100%!important; height:auto!important; max-height:60dvh!important; aspect-ratio:auto!important; object-fit:contain!important; object-position:center center!important; transform:none!important; -webkit-transform:none!important; }
   #cameraSlot #camCanvas { object-fit:contain!important; transform:none!important; }
+  /* Foto hasil tangkapan ditampilkan utuh (sebelumnya dipotong cover 3:4 / 96x96 / 100x130) */
+  img[alt="Pratinjau foto presensi"], img[alt="Foto presensi"], img[alt="Foto yang diambil"] { aspect-ratio:auto!important; height:auto!important; max-height:60dvh!important; object-fit:contain!important; transform:none!important; background:#111827; }
 </style>
 <script id="v1016CameraCaptureParity">
-// Preview and saved image both use the raw camera frame: no mirror, no CSS crop, no digital zoom.
-startCamera = async function(){
+// Preview & foto tersimpan memakai bingkai mentah kamera: tanpa mirror, tanpa crop CSS, tanpa digital zoom.
+async function v1016OpenStream_(facing){
+  const tries=[
+    {facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:960}},   // 4:3 = bidang sensor penuh (tidak ter-crop 16:9)
+    {facingMode:{ideal:facing}}
+  ];
+  let lastErr;
+  for(const v of tries){
+    try{ return await navigator.mediaDevices.getUserMedia({video:v,audio:false}); }
+    catch(err){ lastErr=err; if(err&&(err.name==='NotAllowedError'||err.name==='SecurityError'))break; }
+  }
+  throw lastErr;
+}
+async function v1016ResetZoom_(stream){
+  try{
+    const t=stream.getVideoTracks()[0]; if(!t||!t.getCapabilities)return;
+    const c=t.getCapabilities();
+    if(c.zoom&&typeof c.zoom.min==='number') await t.applyConstraints({advanced:[{zoom:c.zoom.min}]});
+  }catch(e){ /* perangkat tanpa kontrol zoom: abaikan */ }
+}
+async function v1016Attach_(facing){
   stopCamera();
   const video=document.getElementById('camVideo'); if(!video)return;
-  try {
-    const facing=state.cameraFacing||'user';
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing}},audio:false});
+  try{
+    const stream=await v1016OpenStream_(facing);
     state.stream=stream; video.srcObject=stream;
     video.style.setProperty('transform','none','important');
     video.style.setProperty('object-fit','contain','important');
-    await video.play();
-  } catch(err){console.warn('Camera blocked/unavailable:',err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
-};
-switchCameraFacing = async function(mode){
-  state.cameraFacing=mode; stopCamera();
-  const video=document.getElementById('camVideo'); if(!video)return;
-  try {const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:mode}},audio:false});state.stream=stream;video.srcObject=stream;video.style.setProperty('transform','none','important');video.style.setProperty('object-fit','contain','important');await video.play();}
-  catch(err){showToast('Kamera tidak tersedia. Periksa izin kamera perangkat.');}
-};
+    await v1016ResetZoom_(stream);
+    await video.play().catch(()=>{});
+  }catch(err){
+    console.warn('Camera blocked/unavailable:',err);
+    showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');
+  }
+}
+startCamera = function(){ return v1016Attach_(state.cameraFacing||'user'); };
+switchCameraFacing = function(mode){ state.cameraFacing=mode; return v1016Attach_(mode); };
 capturePhotoDataUrl_ = function(){
   const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');
   if(!video||!canvas||!video.videoWidth||!video.videoHeight)return null;
-  // Native aspect ratio, no crop and no mirror; downscale proportionally only to limit upload size.
+  // Ukuran asli (hanya diperkecil proporsional), tanpa crop dan tanpa mirror.
   const maxDim=1280, ratio=Math.min(1,maxDim/Math.max(video.videoWidth,video.videoHeight));
   canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
   const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  try{return canvas.toDataURL('image/jpeg',0.88);}catch(err){console.warn('Gagal mengambil foto:',err);return null;}
+  try{return canvas.toDataURL('image/jpeg',0.85);}catch(err){console.warn('Gagal mengambil foto:',err);return null;}
 };
 </script>
 
