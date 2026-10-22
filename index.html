@@ -421,21 +421,13 @@
 #content.presensi-compact .typechoice{margin-bottom:5px;gap:6px}
 #content.presensi-compact .typechoice button{padding:8px;font-size:11.5px}
 #content.presensi-compact #cameraSlot .section-title{text-align:left;margin-top:4px}
-#content.presensi-compact #btnCapture{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(66px + env(safe-area-inset-bottom));width:min(calc(100% - 24px),456px);z-index:50;box-shadow:0 4px 12px #0f172a35;margin:0}
 #content.presensi-compact .camera-controls{display:flex;gap:8px;margin-top:5px}
 #content.presensi-compact .camera-controls button{flex:1;padding:8px;font-size:11px}
 @media(max-height:720px){#content.presensi-compact{padding-top:5px}}
 @media(max-width:390px){.metric-row{grid-template-columns:repeat(2,1fr)}}
 
 </style>
-<style id="cameraFinal">
-  /* Kamera presensi: bingkai asli, tidak di-crop, tidak ter-zoom. Mirror hanya lewat tombol Balik (preview + foto sama). */
-  #cameraSlot .camera-wrap{position:relative;width:min(100%,360px);margin:6px auto 8px;border-radius:14px;overflow:hidden;background:#0f172a;border:1px solid #1e293b}
-  #cameraSlot #camVideo{display:block;width:100%;height:auto;min-height:160px;max-height:55dvh;object-fit:contain}
-  #cameraSlot #camCanvas{display:none}
-  #cameraSlot .camera-controls{flex-wrap:wrap}
-  img[alt="Pratinjau foto presensi"],img[alt="Foto presensi"],img[alt="Foto yang diambil"]{aspect-ratio:auto!important;height:auto!important;max-height:55dvh;object-fit:contain!important;background:#0f172a}
-</style>
+
 </head>
 <body>
 
@@ -1217,7 +1209,7 @@ function camIsFlipped_(){
 }
 function camApplyView_(){
   const v=document.getElementById('camVideo'); if(v)v.style.transform=camIsFlipped_()?'scaleX(-1)':'none';
-  const b=document.getElementById('btnFlipCam'); if(b)b.textContent='↔ Balik Kiri-Kanan: '+(camIsFlipped_()?'ON':'OFF');
+  const b=document.getElementById('btnFlipCam'); if(b){b.classList.toggle('on',camIsFlipped_());b.setAttribute('aria-pressed',camIsFlipped_()?'true':'false');}
 }
 function toggleCameraFlip(){
   const k=state.cameraFacing||'user'; const nv=!camIsFlipped_(); state.camFlip[k]=nv;
@@ -1260,6 +1252,7 @@ async function startCamera(){
   }
 }
 function switchCameraFacing(mode){ state.cameraFacing=mode; return startCamera(); }
+function toggleCameraFacing(){ return switchCameraFacing((state.cameraFacing||'user')==='user'?'environment':'user'); }
 function capturePhotoDataUrl_(){
   const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');
   if(!video||!canvas||!video.videoWidth||!video.videoHeight)return null;
@@ -2793,7 +2786,7 @@ function renderAbsenTab(){
     ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Hari libur HR tidak mengurangi XP atau Skor KPI.</span></div>`:`
     <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>
     ${isHr?`<h2 class="section-title">Shift HR</h2><div class="shift-picker"><div style="padding:10px 12px;font-size:12px;font-weight:800">Pagi • Senin–Jumat <span class="shift-current">${HR_WORK_SHIFT.start}–${HR_WORK_SHIFT.end}</span></div></div>`:`<h2 class="section-title">Shift Kerja</h2><div class="shift-picker" style="padding:12px;font-size:12px;font-weight:700">🗓️ Shift ditentukan otomatis dari jadwal karyawan terbaru.</div>`}
-    <div id="cameraSlot"><h2 class="section-title">Foto Tagging Realtime</h2><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button><div class="camera-controls"><button class="btn secondary" type="button" onclick="switchCameraFacing('user')">🤳 Kamera Depan</button><button class="btn secondary" type="button" onclick="switchCameraFacing('environment')">📷 Kamera Belakang</button><button class="btn secondary" type="button" id="btnFlipCam" onclick="toggleCameraFlip()">↔ Balik Kiri-Kanan</button></div></div><div id="resultSlot"></div>`}`;
+    <div id="cameraSlot"><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas><div class="cam-tools"><button type="button" class="cam-ico" id="btnCamSwitch" title="Ganti kamera depan/belakang" aria-label="Ganti kamera depan/belakang" onclick="toggleCameraFacing()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button><button type="button" class="cam-ico" id="btnFlipCam" title="Balik kiri-kanan" aria-label="Balik kiri-kanan" aria-pressed="false" onclick="toggleCameraFlip()"><svg viewBox="0 0 24 24"><path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg></button></div></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button></div><div id="resultSlot"></div>`}`;
   updateLocationBadgeUI(); if(!off)startCamera();
 }
 
@@ -3780,7 +3773,6 @@ gasCall=async function(action,payload={}){
 <!-- V10.3 HOTFIX: camera UX, stable IDs, approval visibility and HR leave overview -->
 <style id="v103HotfixStyles">
   #cameraSlot .section-title{margin-top:8px!important}
-  #btnCapture{position:sticky;bottom:68px;z-index:5;box-shadow:0 5px 14px rgba(15,23,42,.16)}
   @media(max-height:700px){.shift-grid{margin-bottom:6px}.typechoice{margin-bottom:6px}}
 </style>
 <script id="v103Hotfix">
@@ -4048,6 +4040,85 @@ renderHRDashboard=function(){v1014OldRenderHRDashboard();v1014EnsureAttendanceTi
 <!-- V10.16 HOTFIX: Leader Kegiatan, agenda RSVP persistence feedback, camera framing parity -->
 
 
+<style id="compactFinal">
+/* ===== TAMPILAN RINGKAS — jarak antar baris/kolom, ukuran huruf & komponen dipadatkan agar muat satu layar ===== */
+body{line-height:1.3}
+.topbar{padding:5px 12px 4px}
+.topbar .who .nama{font-size:12.5px}.topbar .who .sub{font-size:10px;margin-top:0}
+.topbar .clock{font-size:13px;line-height:1.1}.topbar .clock .date{font-size:9px;margin-top:0}
+.gamify-bar{padding:3px 10px;font-size:10px}.gamify-badge{padding:1px 6px}
+.broadcast-banner{padding:4px 10px;font-size:10.5px;gap:6px;line-height:1.25}
+#broadcastText{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#content{padding:8px 10px 54px}
+h2.section-title{margin:8px 0 4px;font-size:10.5px}
+.card{padding:9px 10px;margin-bottom:6px;border-radius:10px}
+.btn{padding:8px 10px;font-size:12.5px;border-radius:9px}
+input,textarea,select{padding:7px 9px;margin-bottom:6px;font-size:12.5px}
+label{margin-bottom:2px}
+.bottomnav{padding:3px 6px calc(3px + env(safe-area-inset-bottom));gap:2px}
+.navbtn{min-height:42px;padding:3px 2px;gap:1px;border-radius:10px}
+.navbtn svg{width:16px;height:16px}
+.home-hero{padding:8px 11px;margin-bottom:6px;border-radius:12px}
+.home-hero .title{font-size:15px;margin-top:1px}.home-hero .desc{margin-top:2px;line-height:1.3}
+.home-grid{gap:6px}
+.home-tile{padding:8px 10px;min-height:0;border-radius:10px}
+.home-tile .icon{font-size:16px;margin-bottom:2px}
+.home-tile .desc{font-size:9.5px;line-height:1.2;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.home-summary{gap:5px;margin-top:6px}.mini-stat{padding:4px}.mini-stat .value{font-size:14px}
+.notice-strip,.important-notice{padding:6px 9px;margin-bottom:6px}
+.collapse-card{margin-bottom:6px}.collapse-card summary{padding:8px 10px}.collapse-body{padding:0 10px 8px}
+.profile-compact{padding:7px 9px;margin-bottom:6px;gap:9px}.profile-avatar{width:38px;height:38px;font-size:14px}
+.home-section-title{margin:8px 1px 4px}
+.leader-action-list{gap:5px}.leader-action{padding:6px 8px}
+.member-card,.team-agenda-card,.message-card,.report-card,.performance-card,.hr-kpi-card{padding:8px 10px;margin-bottom:6px}
+.timeline-item,.repo-row,.decision-card{padding:7px 0}.timeline-desc{margin:3px 0}
+.subnav-tabs{margin-bottom:8px;padding:3px}.subnav-btn{padding:6px 4px}
+.shift-grid,.typechoice{margin-bottom:7px}.shift-tile{padding:7px}.typechoice button{padding:7px}
+.shift-picker{margin:4px 0 6px}.shift-picker summary{padding:7px 10px}
+.location-badge{padding:5px 9px;margin-bottom:6px}
+.hist-row{padding:6px 0}
+.empty{padding:16px 10px}
+.v4-section-head{margin:2px 0 6px}
+.offday-box{padding:10px}
+
+/* ===== Layar presensi: satu layar, kamera mengisi sisa ruang ===== */
+#content.presensi-compact{display:flex;flex-direction:column;gap:6px;padding:6px 10px 52px;overflow-y:auto}
+#content.presensi-compact>*{flex:none;margin-top:0;margin-bottom:0}
+#content.presensi-compact h2.section-title{display:none}
+#content.presensi-compact .location-badge{padding:4px 9px;font-size:10.5px}
+#content.presensi-compact .typechoice{margin:0}
+#content.presensi-compact .shift-picker{margin:0;padding:6px 10px!important;font-size:11px!important}
+#content.presensi-compact #resultSlot:empty{display:none}
+#content.presensi-compact #cameraSlot{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px}
+#cameraSlot .camera-wrap{position:relative;flex:1 1 auto;min-height:150px;width:100%;margin:0;border-radius:12px;overflow:hidden;background:#0f172a;border:1px solid #1e293b}
+#cameraSlot #camVideo{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
+#cameraSlot #camCanvas{display:none}
+#cameraSlot .cam-tools{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.cam-ico{width:34px;height:34px;border-radius:50%;border:0;background:rgba(15,23,42,.55);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.cam-ico svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.cam-ico.on{background:#2563eb}
+#btnCapture{position:static!important;transform:none!important;margin:0;width:100%;box-shadow:none}
+img[alt="Pratinjau foto presensi"],img[alt="Foto presensi"],img[alt="Foto yang diambil"]{aspect-ratio:auto!important;height:auto!important;max-height:32dvh;object-fit:contain!important;background:#0f172a}
+
+/* ===== Kehadiran Saya (semua role): kalender + ringkasan + detail dalam satu layar ===== */
+#content .att-cal-wrap{padding:8px 9px;margin:0 0 6px;border-radius:12px}
+#content .att-cal-head{margin-bottom:6px;gap:6px}
+#content .att-cal-head strong{font-size:13px}
+#content .att-cal-head small{font-size:10px;font-weight:600;color:#718096;margin-left:5px}
+.att-tools{display:flex;align-items:center;gap:5px}
+#content .att-tools select{width:auto;max-width:none;margin:0;padding:4px 6px;font-size:11px}
+.att-ibtn{width:28px;height:28px;border:1px solid #dbe4f0;background:#fff;border-radius:8px;font-size:13px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#content .att-cal-grid{gap:3px}
+#content .att-cal-dow{padding:0 0 1px;font-size:9px}
+#content .att-cal-day{min-height:30px;padding:0;border-radius:7px;font-size:11.5px;gap:0}
+#content .att-summary{gap:5px;margin:0 0 6px}
+#content .att-stat{padding:5px 4px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:5px}
+#content .att-stat strong{display:inline;font-size:15px}#content .att-stat span{font-size:9.5px}
+#content .att-detail{padding:7px 9px;margin:0;border-radius:10px}
+.att-detail-title{font-size:11px;font-weight:800;color:#182338;margin-bottom:3px}
+.att-rec{display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;border-left:3px solid;border-radius:6px;padding:4px 7px;margin:3px 0;font-size:11px;color:#243247}
+.att-rec b{font-size:10.5px}.att-rec .st{font-weight:800;margin-left:auto}.att-rec a{text-decoration:none;font-size:13px}
+</style>
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
@@ -4149,7 +4220,12 @@ function attDateKeyV1013(v){const s=String(v||'');const m=s.match(/(\d{4})-(\d{2
 function attStatusClassV1013(r){const s=String(r.status_text||r.status||'').toLowerCase();if(/alpha/.test(s))return 'alpha';if(/terlambat masuk|terlambat briefing|terlambat/.test(s))return 'late';if(/tidak absen pulang|pulang awal|gagal|ditolak/.test(s))return 'bad';if(/izin|libur|cuti|menunggu|pending/.test(s))return 'leave';if(/tepat waktu|hadir|approved|disetujui/.test(s))return 'good';return 'neutral';}
 function attStatusColorV1013(cls){return ({good:['#e8f8ef','#b9e8cc','#13804a'],late:['#fff7dc','#f3df9b','#a66a00'],alpha:['#fff0f0','#f2bfc2','#c52d35'],bad:['#fff0f0','#f2bfc2','#c52d35'],leave:['#fff7dc','#f3df9b','#a66a00'],neutral:['#f1f5f9','#dce4ee','#596579']})[cls]||['#f1f5f9','#dce4ee','#596579'];}
 function attMonthLabelV1013(m){return ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][Number(m.slice(5,7))-1]+' '+m.slice(0,4);}
-function attRenderDayDetailV1013(date,records){const c=document.getElementById('attDateDetail');if(!c)return;const list=records.filter(r=>attDateKeyV1013(r.date)===date).sort((a,b)=>attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));if(!list.length){c.innerHTML='<div class="att-detail">Tidak ada catatan pada tanggal ini.</div>';return;}c.innerHTML=`<div class="att-detail"><h3>Detail ${escAttV1011(attDateV1012(date))}</h3>${list.map(r=>{const st=String(r.status_text||r.status||'Tercatat'),cl=attStatusClassV1013(r),co=attStatusColorV1013(cl);return `<div style="border-left:4px solid ${co[2]};padding:8px 9px;margin:7px 0;background:${co[0]};border-radius:7px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><strong>${escAttV1011(String(r.type||'system').toUpperCase())}</strong><span style="font-size:11px;font-weight:800;color:${co[2]}">${escAttV1011(st)}</span></div><div class="att-detail-row"><span>Jam</span><strong>${escAttV1011(attTimeV1012(r.time))}</strong></div><div class="att-detail-row"><span>Shift</span><strong>${escAttV1011(r.shift||'—')}</strong></div><div class="att-detail-row"><span>XP</span><strong>${Number(r.xp_earned||0)>0?'+':''}${Number(r.xp_earned||0)}</strong></div>${r.photo_url?`<div style="margin-top:6px"><a href="${escAttV1011(r.photo_url)}" target="_blank" rel="noopener">Lihat foto presensi</a></div>`:''}</div>`}).join('')}</div>`;}
+function attRenderDayDetailV1013(date,records){
+ const c=document.getElementById('attDateDetail');if(!c)return;
+ const list=records.filter(r=>attDateKeyV1013(r.date)===date).sort((a,b)=>attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));
+ if(!list.length){c.innerHTML='<div class="att-detail">Tidak ada catatan pada tanggal ini.</div>';return;}
+ c.innerHTML=`<div class="att-detail"><div class="att-detail-title">${escAttV1011(attDateV1012(date))}</div>${list.map(r=>{const st=String(r.status_text||r.status||'Tercatat'),co=attStatusColorV1013(attStatusClassV1013(r)),xp=Number(r.xp_earned||0);return `<div class="att-rec" style="border-left-color:${co[2]};background:${co[0]}"><b>${escAttV1011(String(r.type||'system').toUpperCase())}</b><span>${escAttV1011(attTimeV1012(r.time))}</span><span>${escAttV1011(r.shift||'—')}</span><span>${xp>0?'+':''}${xp} XP</span>${r.photo_url?`<a href="${escAttV1011(r.photo_url)}" target="_blank" rel="noopener" title="Lihat foto presensi" aria-label="Lihat foto presensi">🖼️</a>`:''}<span class="st" style="color:${co[2]}">${escAttV1011(st)}</span></div>`}).join('')}</div>`;
+}
 // V10.15: cache in-memory + prefetch agar halaman kehadiran langsung tampil saat dibuka.
 let attHistoryCacheV1015={nik:'',records:null,at:0,promise:null};
 function attHistoryNikV1015(){return String(state.activeProfile?.nik||'');}
@@ -4174,9 +4250,9 @@ async function renderAttendanceHistoryV1011(monthFilter,selectedDate){
  const months=[...new Set(all.map(r=>attDateKeyV1013(r.date).slice(0,7)).filter(x=>/^\d{4}-\d{2}$/.test(x)))];if(!months.includes(current))months.push(current);months.sort().reverse();
  const countClass=cl=>Object.values(groups).some(arr=>arr.some(r=>attStatusClassV1013(r)===cl));
  let good=0,late=0,alpha=0,leave=0,other=0,totalXp=0;records.forEach(r=>{const cl=attStatusClassV1013(r),type=String(r.type||'').toLowerCase();totalXp+=Number(r.xp_earned||0);if(cl==='good'&&type==='masuk')good++;else if(cl==='late')late++;else if(cl==='alpha')alpha++;else if(cl==='leave')leave++;else if(cl==='bad')other++;});
- const dayCells=[];for(let i=0;i<offset;i++)dayCells.push('<div class="att-cal-day empty"></div>');for(let day=1;day<=daysInMonth;day++){const date=`${current}-${String(day).padStart(2,'0')}`,arr=groups[date]||[];let cls='neutral';if(arr.length){const classes=arr.map(attStatusClassV1013);cls=classes.includes('alpha')?'alpha':classes.includes('bad')?'bad':classes.includes('late')?'late':classes.includes('leave')?'leave':classes.includes('good')?'good':'neutral';}const co=attStatusColorV1013(cls);dayCells.push(`<button class="att-cal-day ${arr.length?'has-record':''} ${selectedDate===date?'selected':''}" ${arr.length?`onclick="renderAttendanceHistoryV1011('${current}','${date}')"`: 'disabled'} style="--day-bg:${arr.length?co[0]:'#f8fafc'};--day-border:${arr.length?co[1]:'#e5eaf1'};--day-color:${arr.length?co[2]:'#9aa6b7'}" aria-label="${date}${arr.length?', '+arr.length+' catatan':''}"><span>${day}</span>${arr.length?'<i class="att-cal-dot"></i>':''}</button>`);}
+ const dayCells=[];for(let i=0;i<offset;i++)dayCells.push('<div class="att-cal-day empty"></div>');for(let day=1;day<=daysInMonth;day++){const date=`${current}-${String(day).padStart(2,'0')}`,arr=groups[date]||[];let cls='neutral';if(arr.length){const classes=arr.map(attStatusClassV1013);cls=classes.includes('alpha')?'alpha':classes.includes('bad')?'bad':classes.includes('late')?'late':classes.includes('leave')?'leave':classes.includes('good')?'good':'neutral';}const co=attStatusColorV1013(cls);dayCells.push(`<button class="att-cal-day ${arr.length?'has-record':''} ${selectedDate===date?'selected':''}" ${arr.length?`onclick="renderAttendanceHistoryV1011('${current}','${date}')"`: 'disabled'} style="--day-bg:${arr.length?co[0]:'#f8fafc'};--day-border:${arr.length?co[1]:'#e5eaf1'};--day-color:${arr.length?co[2]:'#9aa6b7'}" aria-label="${date}${arr.length?', '+arr.length+' catatan':''}"><span>${day}</span></button>`);}
  const picked=selectedDate&&selectedDate.startsWith(current)&&groups[selectedDate]?selectedDate:(Object.keys(groups).sort().reverse()[0]||'');
- c.innerHTML=`<div id="attendancePrintArea"><div class="home-hero"><div class="eyebrow">PRESENSI</div><div class="title">Kehadiran Saya</div><div class="desc">${escAttV1011(attMonthLabelV1013(current))} • ${records.length} catatan</div></div><div class="att-cal-wrap"><div class="att-cal-head"><strong>Kalender Kehadiran</strong><select class="att-no-print" aria-label="Pilih bulan" onchange="renderAttendanceHistoryV1011(this.value)">${months.map(m=>`<option value="${m}" ${m===current?'selected':''}>${escAttV1011(attMonthLabelV1013(m))}</option>`).join('')}</select></div><div class="att-cal-grid">${['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(x=>`<div class="att-cal-dow">${x}</div>`).join('')}${dayCells.join('')}</div><div class="att-cal-legend"><span><i class="att-legend-dot" style="background:#13804a"></i>Hadir</span><span><i class="att-legend-dot" style="background:#a66a00"></i>Terlambat / izin</span><span><i class="att-legend-dot" style="background:#c52d35"></i>Alpha / masalah</span></div></div><div class="att-summary"><div class="att-stat att-green"><strong>${good}</strong><span>Hadir tepat waktu</span></div><div class="att-stat att-yellow"><strong>${late+leave}</strong><span>Terlambat / izin</span></div><div class="att-stat att-red"><strong>${alpha+other}</strong><span>Alpha / masalah</span></div></div><div class="att-actions att-no-print"><button class="btn secondary" onclick="printAttendancePDFV1013('${current}')">📄 Simpan laporan PDF</button><button class="btn secondary" onclick="switchTab('home',true)">← Beranda</button></div><div id="attDateDetail"></div><section id="attPdfReport" style="display:none"><div class="att-report-title"><h2>LAPORAN KEHADIRAN KARYAWAN</h2><div>${escAttV1011(state.activeProfile?.nama||'')} • ${escAttV1011(state.activeProfile?.nik||'')}</div><div>Periode ${escAttV1011(attMonthLabelV1013(current))}</div></div><p>Ringkasan: ${good} hadir tepat waktu; ${late} terlambat; ${leave} izin/libur; ${alpha} Alpha; ${other} masalah absensi.</p><p>Total catatan: ${records.length} • Total XP absensi: ${totalXp>0?'+':''}${totalXp}</p><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #ccc;padding:5px">Tanggal</th><th style="border:1px solid #ccc;padding:5px">Jenis</th><th style="border:1px solid #ccc;padding:5px">Jam</th><th style="border:1px solid #ccc;padding:5px">Shift</th><th style="border:1px solid #ccc;padding:5px">Status</th><th style="border:1px solid #ccc;padding:5px">XP</th></tr></thead><tbody>${records.slice().sort((a,b)=>attDateKeyV1013(a.date).localeCompare(attDateKeyV1013(b.date))||attTimeV1012(a.time).localeCompare(attTimeV1012(b.time))).map(r=>`<tr><td style="border:1px solid #ccc;padding:5px">${escAttV1011(attDateV1012(r.date))}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(String(r.type||'system').toUpperCase())}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(attTimeV1012(r.time))}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(r.shift||'—')}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(r.status_text||r.status||'Tercatat')}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${Number(r.xp_earned||0)>0?'+':''}${Number(r.xp_earned||0)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="5" style="border:1px solid #ccc;padding:5px;text-align:right">TOTAL XP</th><th style="border:1px solid #ccc;padding:5px;text-align:right">${totalXp>0?'+':''}${totalXp}</th></tr></tfoot></table></section></div>`;
+ c.innerHTML=`<div id="attendancePrintArea"><div class="att-cal-wrap"><div class="att-cal-head"><strong>Kehadiran Saya<small>${records.length} catatan</small></strong><div class="att-tools att-no-print"><select aria-label="Pilih bulan" onchange="renderAttendanceHistoryV1011(this.value)">${months.map(m=>`<option value="${m}" ${m===current?'selected':''}>${escAttV1011(attMonthLabelV1013(m))}</option>`).join('')}</select><button class="att-ibtn" title="Simpan laporan PDF" aria-label="Simpan laporan PDF" onclick="printAttendancePDFV1013('${current}')">📄</button><button class="att-ibtn" title="Beranda" aria-label="Beranda" onclick="switchTab('home',true)">🏠</button></div></div><div class="att-cal-grid">${['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(x=>`<div class="att-cal-dow">${x}</div>`).join('')}${dayCells.join('')}</div></div><div class="att-summary"><div class="att-stat att-green"><strong>${good}</strong><span>Hadir</span></div><div class="att-stat att-yellow"><strong>${late+leave}</strong><span>Telat/izin</span></div><div class="att-stat att-red"><strong>${alpha+other}</strong><span>Alpha/masalah</span></div></div><div id="attDateDetail"></div><section id="attPdfReport" style="display:none"><div class="att-report-title"><h2>LAPORAN KEHADIRAN KARYAWAN</h2><div>${escAttV1011(state.activeProfile?.nama||'')} • ${escAttV1011(state.activeProfile?.nik||'')}</div><div>Periode ${escAttV1011(attMonthLabelV1013(current))}</div></div><p>Ringkasan: ${good} hadir tepat waktu; ${late} terlambat; ${leave} izin/libur; ${alpha} Alpha; ${other} masalah absensi.</p><p>Total catatan: ${records.length} • Total XP absensi: ${totalXp>0?'+':''}${totalXp}</p><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #ccc;padding:5px">Tanggal</th><th style="border:1px solid #ccc;padding:5px">Jenis</th><th style="border:1px solid #ccc;padding:5px">Jam</th><th style="border:1px solid #ccc;padding:5px">Shift</th><th style="border:1px solid #ccc;padding:5px">Status</th><th style="border:1px solid #ccc;padding:5px">XP</th></tr></thead><tbody>${records.slice().sort((a,b)=>attDateKeyV1013(a.date).localeCompare(attDateKeyV1013(b.date))||attTimeV1012(a.time).localeCompare(attTimeV1012(b.time))).map(r=>`<tr><td style="border:1px solid #ccc;padding:5px">${escAttV1011(attDateV1012(r.date))}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(String(r.type||'system').toUpperCase())}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(attTimeV1012(r.time))}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(r.shift||'—')}</td><td style="border:1px solid #ccc;padding:5px">${escAttV1011(r.status_text||r.status||'Tercatat')}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${Number(r.xp_earned||0)>0?'+':''}${Number(r.xp_earned||0)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="5" style="border:1px solid #ccc;padding:5px;text-align:right">TOTAL XP</th><th style="border:1px solid #ccc;padding:5px;text-align:right">${totalXp>0?'+':''}${totalXp}</th></tr></tfoot></table></section></div>`;
  if(picked)attRenderDayDetailV1013(picked,records);else document.getElementById('attDateDetail').innerHTML='<div class="att-detail">Belum ada catatan kehadiran pada bulan ini.</div>';
 }
 function printAttendancePDFV1013(month){const area=document.getElementById('attendancePrintArea'),report=document.getElementById('attPdfReport');if(!area||!report)return;const old=report.style.display;report.style.display='block';area.classList.add('att-print-report');const title=document.title;document.title='Laporan Kehadiran '+month;window.print();document.title=title;report.style.display=old;area.classList.remove('att-print-report');}
