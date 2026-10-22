@@ -1606,7 +1606,8 @@ async function resolveAgenda(agendaId, statusChoice) {
   if (!nik) { showToast('Sesi pengguna tidak ditemukan. Silakan login ulang.'); return; }
   if (!['mengikuti','tidak'].includes(statusChoice)) { showToast('Pilihan konfirmasi tidak valid.'); return; }
   const key = String(agendaId) + '_' + nik;
-  if (state.agendaUserStatus?.[key]) { showToast('Agenda ini sudah dikonfirmasi.'); return; }
+  if (!state.agendaUserStatus) { try { state.agendaUserStatus = JSON.parse(localStorage.getItem('agenda_user_status_all') || '{}'); } catch (_) { state.agendaUserStatus = {}; } }
+  if (state.agendaUserStatus[key]) { showToast('Agenda ini sudah dikonfirmasi.'); return; }
   const buttons = [...document.querySelectorAll(`button[onclick*="resolveAgenda(${JSON.stringify(String(agendaId))}"]`)];
   buttons.forEach(b => { b.disabled = true; });
   const date = (typeof v6LocalIso === 'function') ? v6LocalIso() : new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -2822,9 +2823,9 @@ function renderAgendaTab(){
   const c=document.getElementById('content'), role=state.activeProfile.role;
   let tabs='';
   if(role==='karyawan') tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda Saya</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
-  else if(role==='leader') tabs=`<button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button><button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button>`;
+  else if(role==='leader') tabs=`<button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button><button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
   else tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button><button class="subnav-btn ${state.agendaSubTab==='broadcast'?'active':''}" onclick="switchAgendaSubTab('broadcast')">📢 Broadcast</button>`;
-  if(role==='leader'&&!['team','agenda'].includes(state.agendaSubTab))state.agendaSubTab='team'; if(role==='karyawan'&&!['agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
+  if(role==='leader'&&!['team','agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='team'; if(role==='karyawan'&&!['agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
   c.innerHTML=`<div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;renderAgendaSubTabContent();
 }
 
@@ -3147,18 +3148,31 @@ function v7LeaderCoordinationScore(leaderNik){
 // Agenda tim Leader tidak menghasilkan XP. Ia hanya memberi sinyal partisipasi/inisiatif dengan bobot kecil.
 v5AgendaXp=function(ag){ return ag?.scope==='team' ? 0 : (parseInt(ag?.xpBonus)||0); };
 
-resolveAgenda=function(agendaId,statusChoice){
-  const ag=state.agendas.find(a=>a.id===agendaId); if(!ag)return;
-  const myNik=state.activeProfile.nik,key=agendaId+'_'+myNik,now=new Date();
-  const isTeam=ag.scope==='team';
-  const xpAward=(!isTeam && statusChoice==='mengikuti') ? v5AgendaXp(ag) : 0;
-  state.agendaUserStatus[key]={status:statusChoice,date:v6LocalIso(now),time:now.toTimeString().slice(0,5),xpAward,initiativeEligible:isTeam&&statusChoice==='mengikuti'};
-  localStorage.setItem('agenda_user_status_all',JSON.stringify(state.agendaUserStatus));
-  if(xpAward>0){state.activeProfile.xp=(state.activeProfile.xp||0)+xpAward;saveProfileChanges();fireConfetti();showToast(`🎉 Agenda HR diselesaikan! +${xpAward} XP.`);}
-  else if(isTeam&&statusChoice==='mengikuti'){
-    const s=v7TeamInitiativeStats(myNik);showToast(`✅ Partisipasi Agenda Tim dicatat. Skor Inisiatif bulan ini: ${s.score}/100 (bobot KPI hanya ${V7_POLICY.teamInitiativeWeight}%).`);
-  } else showToast('Agenda dicatat sebagai Tidak Mengikuti.');
-  renderAgendaTab();
+resolveAgenda=async function(agendaId,statusChoice){
+  const ag=(state.agendas||[]).find(a=>String(a.id)===String(agendaId));
+  if(!ag){showToast('Agenda tidak ditemukan. Muat ulang aplikasi.');return;}
+  if(!['mengikuti','tidak'].includes(statusChoice)){showToast('Pilihan konfirmasi tidak valid.');return;}
+  const myNik=String(state.activeProfile?.nik||'').trim();
+  if(!myNik){showToast('Sesi pengguna tidak ditemukan. Silakan login ulang.');return;}
+  if(!state.agendaUserStatus){try{state.agendaUserStatus=JSON.parse(localStorage.getItem('agenda_user_status_all')||'{}');}catch(_){state.agendaUserStatus={};}}
+  const key=String(ag.id)+'_'+myNik;
+  if(state.agendaUserStatus[key]){showToast('Agenda ini sudah dikonfirmasi.');return;}
+  const btns=[...document.querySelectorAll('#agendaSubTabContent button')].filter(b=>(b.getAttribute('onclick')||'').includes('resolveAgenda(')&&String(b.getAttribute('onclick')).includes(String(agendaId)));
+  btns.forEach(b=>b.disabled=true);
+  const date=typeof v6LocalIso==='function'?v6LocalIso():new Date().toISOString().slice(0,10);
+  try{
+    if(!GAS_URL)throw new Error('Koneksi server belum dikonfigurasi; konfirmasi tidak disimpan.');
+    const res=await gasCall('setAgendaStatus',{agendaId:String(ag.id),nik:myNik,status:statusChoice,date,title:String(ag.title||''),agendaDate:String(ag.date||''),time:String(ag.time||''),location:String(ag.location||''),scope:String(ag.scope||'company'),teamLeaderNik:String(ag.teamLeaderNik||ag.team_leader_nik||ag.creatorNik||ag.created_by||'')});
+    if(!res||res.ok!==true)throw new Error(res?.message||res?.error||'Server tidak mengonfirmasi penyimpanan.');
+    const savedStatus=res.alreadyConfirmed?String(res.status||statusChoice):statusChoice;
+    const xpAward=Number(res.xpAward)||0;
+    state.agendaUserStatus[key]={status:savedStatus,date:res.date||date,time:new Date().toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}),xpAward,initiativeEligible:ag.scope==='team'&&savedStatus==='mengikuti'};
+    localStorage.setItem('agenda_user_status_all',JSON.stringify(state.agendaUserStatus));
+    if(res.user){state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));}
+    if(xpAward>0){updateGamifyBar();fireConfetti();showToast(`Konfirmasi agenda tersimpan • +${xpAward} XP`);}
+    else showToast(savedStatus==='mengikuti'?'Konfirmasi Mengikuti berhasil disimpan.':'Konfirmasi Tidak Mengikuti berhasil disimpan.');
+    renderAgendaTab();
+  }catch(err){showToast('Gagal menyimpan konfirmasi agenda: '+(err?.message||err));btns.forEach(b=>b.disabled=false);}
 };
 
 const v7BaseRenderAgendaList=renderAgendaList;
@@ -4060,6 +4074,46 @@ renderHRDashboard=function(){v1014OldRenderHRDashboard();v1014EnsureAttendanceTi
   setTimeout(hideLeaveUi,0);
 })();
 </script>
+
+
+<!-- V10.16 HOTFIX: Leader Kegiatan, agenda RSVP persistence feedback, camera framing parity -->
+<style id="v1016CameraNoMirrorNoZoom">
+  #cameraSlot .camera-wrap { aspect-ratio:auto!important; width:min(100%,360px)!important; height:auto!important; max-height:none!important; overflow:hidden; background:#111827; }
+  #cameraSlot #camVideo { display:block!important; width:100%!important; height:auto!important; max-height:60dvh!important; aspect-ratio:auto!important; object-fit:contain!important; object-position:center center!important; transform:none!important; }
+  #cameraSlot #camCanvas { object-fit:contain!important; transform:none!important; }
+</style>
+<script id="v1016CameraCaptureParity">
+// Preview and saved image both use the raw camera frame: no mirror, no CSS crop, no digital zoom.
+startCamera = async function(){
+  stopCamera();
+  const video=document.getElementById('camVideo'); if(!video)return;
+  try {
+    const facing=state.cameraFacing||'user';
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing}},audio:false});
+    state.stream=stream; video.srcObject=stream;
+    video.style.setProperty('transform','none','important');
+    video.style.setProperty('object-fit','contain','important');
+    await video.play();
+  } catch(err){console.warn('Camera blocked/unavailable:',err);showToast('⚠️ Kamera tidak dapat diakses. Periksa izin kamera browser.');}
+};
+switchCameraFacing = async function(mode){
+  state.cameraFacing=mode; stopCamera();
+  const video=document.getElementById('camVideo'); if(!video)return;
+  try {const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:mode}},audio:false});state.stream=stream;video.srcObject=stream;video.style.setProperty('transform','none','important');video.style.setProperty('object-fit','contain','important');await video.play();}
+  catch(err){showToast('Kamera tidak tersedia. Periksa izin kamera perangkat.');}
+};
+capturePhotoDataUrl_ = function(){
+  const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');
+  if(!video||!canvas||!video.videoWidth||!video.videoHeight)return null;
+  // Native aspect ratio, no crop and no mirror; downscale proportionally only to limit upload size.
+  const maxDim=1280, ratio=Math.min(1,maxDim/Math.max(video.videoWidth,video.videoHeight));
+  canvas.width=Math.max(1,Math.round(video.videoWidth*ratio));canvas.height=Math.max(1,Math.round(video.videoHeight*ratio));
+  const ctx=canvas.getContext('2d');ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  try{return canvas.toDataURL('image/jpeg',0.88);}catch(err){console.warn('Gagal mengambil foto:',err);return null;}
+};
+</script>
+
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
