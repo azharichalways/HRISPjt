@@ -4168,18 +4168,23 @@ img[alt="Pratinjau foto presensi"],img[alt="Foto presensi"],img[alt="Foto yang d
 #content .hr-recipient-item small{font-size:9px!important}
 @media(max-width:600px){#content .hr-monthly-filters{grid-template-columns:1fr 1fr}#content .hr-monthly-filters .btn{grid-column:1/-1}}
 </style>
-<script id="hr-monthly-filter-v12">
-const _hrMonthlyRenderV12=renderHRMonthlyReportsPage;
+<script id="hr-monthly-filter-v13">
+const _hrMonthlyRenderV13=renderHRMonthlyReportsPage;
 renderHRMonthlyReportsPage=function(){
- _hrMonthlyRenderV12();
+ _hrMonthlyRenderV13();
  const c=document.getElementById('content'); if(!c||c.querySelector('.hr-monthly-filters'))return;
- const reports=(state.monthlyReports||[]).slice();
+ /* Match the exact same ordering used by the original renderer and attach data directly to each rendered card. */
+ const reports=(state.monthlyReports||[]).slice().sort((a,b)=>Number(b.id||0)-Number(a.id||0));
+ const cards=[...c.querySelectorAll('.monthly-report-btn')];
+ cards.forEach((card,i)=>{const r=reports[i];if(!r)return;card.dataset.reportMonth=String(r.month||'').slice(0,7);card.dataset.reportLeader=String(r.leaderNik||r.leader_nik||r.leaderName||r.leader_name||'');});
  const months=[...new Set(reports.map(r=>String(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
- const leaders=[...new Map(reports.map(r=>[String(r.leaderNik||r.leader_nik||r.leaderName||r.leader_name||''),{id:String(r.leaderNik||r.leader_nik||r.leaderName||r.leader_name||''),name:String(r.leaderName||r.leader_name||r.leaderNik||r.leader_nik||'Leader')}])).values()].sort((a,b)=>a.name.localeCompare(b.name));
- const bar=document.createElement('div');bar.className='hr-monthly-filters';bar.innerHTML=`<div><label for="hrReportMonthFilter">Filter bulan</label><select id="hrReportMonthFilter"><option value="">Semua bulan</option>${months.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div><div><label for="hrReportLeaderFilter">Filter Leader</label><select id="hrReportLeaderFilter"><option value="">Semua Leader</option>${leaders.map(l=>`<option value="${l.id.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${l.name.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</option>`).join('')}</select></div><button class="btn secondary" type="button" id="hrReportFilterReset">Reset filter</button>`;
+ const leaders=[...new Map(reports.map(r=>{const id=String(r.leaderNik||r.leader_nik||r.leaderName||r.leader_name||'');return [id,{id,name:String(r.leaderName||r.leader_name||r.leaderNik||r.leader_nik||'Leader')}]})).values()].sort((a,b)=>a.name.localeCompare(b.name));
+ const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+ const bar=document.createElement('div');bar.className='hr-monthly-filters';bar.innerHTML=`<div><label for="hrReportMonthFilter">Filter bulan</label><select id="hrReportMonthFilter"><option value="">Semua bulan</option>${months.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('')}</select></div><div><label for="hrReportLeaderFilter">Filter Leader</label><select id="hrReportLeaderFilter"><option value="">Semua Leader</option>${leaders.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></div><button class="btn secondary" type="button" id="hrReportFilterReset">Reset filter</button>`;
  const head=c.querySelector('.v4-section-head'); if(head)head.insertAdjacentElement('afterend',bar);else c.prepend(bar);
- function apply(){const m=document.getElementById('hrReportMonthFilter').value,l=document.getElementById('hrReportLeaderFilter').value;const cards=[...c.querySelectorAll('.report-card')];cards.forEach(card=>{const strong=card.querySelector('strong');const report=reports.find(r=>strong&&strong.textContent.includes(String(r.leaderName||r.leader_name||''))&&strong.textContent.includes(String(r.month||'')));card.style.display=(!report||(!m||String(report.month||'').slice(0,7)===m)&&(!l||String(report.leaderNik||report.leader_nik||report.leaderName||report.leader_name||'')===l))?'':'none';});}
+ function apply(){const m=document.getElementById('hrReportMonthFilter')?.value||'',l=document.getElementById('hrReportLeaderFilter')?.value||'';const reportCards=[...c.querySelectorAll('.monthly-report-btn')];let visible=0;reportCards.forEach(card=>{const matchMonth=!m||card.dataset.reportMonth===m;const matchLeader=!l||card.dataset.reportLeader===l;card.style.display=(matchMonth&&matchLeader)?'':'none';if(matchMonth&&matchLeader)visible++;});let status=c.querySelector('.hr-filter-result-count');if(!status){status=document.createElement('div');status.className='hr-filter-result-count';status.style.cssText='font-size:10px;color:#64748b;margin:0 0 6px';bar.insertAdjacentElement('afterend',status);}status.textContent=`Menampilkan ${visible} dari ${reportCards.length} laporan.`;}
  document.getElementById('hrReportMonthFilter').addEventListener('change',apply);document.getElementById('hrReportLeaderFilter').addEventListener('change',apply);document.getElementById('hrReportFilterReset').addEventListener('click',()=>{document.getElementById('hrReportMonthFilter').value='';document.getElementById('hrReportLeaderFilter').value='';apply();});
+ apply();
 };
 </script>
 <script id="hr-bulk-recipient-fix-v12">
