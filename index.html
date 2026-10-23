@@ -4190,6 +4190,67 @@ function filterHRRecipientsV1(){const q=(document.getElementById('hrRecipientSea
 function updateHRRecipientCountV1(){const el=document.getElementById('hrRecipientCount');if(el)el.textContent=document.querySelectorAll('#hrRecipientList .hr-recipient-check:checked').length;const total=document.querySelectorAll('#hrRecipientList .hr-recipient-check').length;const hint=el?.parentElement;if(hint)hint.firstChild.textContent=`${el.textContent} dari ${total} penerima dipilih. `;}
 </script>
 
+
+<script id="hr-workflow-connection-v14">
+/* V14: synchronize activity approvals from Google Sheets before HR renders them. */
+const _renderAgendaTab_v14 = renderAgendaTab;
+renderAgendaTab = async function(){
+  const role=String(state.activeProfile?.role||'').toLowerCase();
+  if(role==='hr' && state.agendaSubTab==='kegiatan' && GAS_URL){
+    try { await syncFromServer(); } catch(e) { console.warn('Sync kegiatan HR gagal',e); }
+  }
+  return _renderAgendaTab_v14();
+};
+/* Make the activity approval panel independent of older wrapper order. */
+const _renderAgendaSubTabContent_v14 = renderAgendaSubTabContent;
+renderAgendaSubTabContent = function(){
+  _renderAgendaSubTabContent_v14();
+  const role=String(state.activeProfile?.role||'').toLowerCase();
+  if(role!=='hr' || state.agendaSubTab!=='kegiatan') return;
+  const c=document.getElementById('agendaSubTabContent'); if(!c) return;
+  c.querySelectorAll('.activity-approval-panel-v14').forEach(x=>x.remove());
+  let all=[]; try{all=JSON.parse(localStorage.getItem('activities_all')||'[]')}catch(_){}
+  const pending=all.filter(a=>String(a.status||'Pending').toLowerCase()==='pending')
+    .sort((a,b)=>String(b.createdAt||b.date||b.id||'').localeCompare(String(a.createdAt||a.date||a.id||'')));
+  const wrap=document.createElement('section'); wrap.className='activity-approval-panel-v14';
+  wrap.innerHTML=`<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota &amp; Leader (${pending.length})</h2>
+  <div class="form-hint" style="margin-bottom:8px">Tinjau pengajuan dari Anggota maupun Leader. Diterima: +XP sesuai jenis kegiatan; ditolak: -XP dengan nilai yang sama. Pengajuan yang dibatalkan tidak dapat diproses.</div>
+  ${pending.length?pending.map(a=>`<div class="card" style="padding:10px;margin:7px 0">
+    <div style="font-weight:800;font-size:12px">${vActEsc(a.nama||a.nik||'Pengguna')} — ${vActEsc(a.type||'Kegiatan')}</div>
+    <div class="muted" style="font-size:10px;margin-top:4px">${vActEsc(a.role||'')} • ${vActEsc(a.date||'')} • Potensi XP ${Number(a.xpRequested||a.xp_requested||vActXp(a.type))}</div>
+    <div style="font-size:11px;margin-top:6px">${vActEsc(a.note||'Tanpa catatan')}</div>
+    <div style="display:flex;gap:6px;margin-top:9px">
+      <button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','approve')">✅ Terima (+${Number(a.xpRequested||a.xp_requested||vActXp(a.type))} XP)</button>
+      <button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','reject')">❌ Tolak (-${Number(a.xpRequested||a.xp_requested||vActXp(a.type))} XP)</button>
+    </div></div>`).join(''):'<div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div>'}`;
+  c.prepend(wrap);
+};
+/* Explicit read acknowledgment: recipient confirms a private message was read. */
+async function acknowledgeHRMessageV14(id){
+  if(!GAS_URL){showToast('Koneksi server diperlukan untuk mengonfirmasi pesan.');return;}
+  const res=await gasCall('markMessageRead',{id});
+  if(!res?.ok){showToast('❌ Konfirmasi baca gagal: '+(res?.message||res?.error||'coba lagi'));return;}
+  const all=JSON.parse(localStorage.getItem('private_messages_all')||'[]').map(m=>String(m.id)===String(id)?{...m,readAt:res.readAt||new Date().toISOString()}:m);
+  localStorage.setItem('private_messages_all',JSON.stringify(all)); state.privateMessages=all;
+  showToast('✅ Pesan dikonfirmasi sudah dibaca HR.'); renderInboxPage();
+}
+function renderInboxPage_v14(){
+  const c=document.getElementById('content'),msgs=getAllHRMessages(state.activeProfile.nik);
+  renderBroadcastBanner();
+  c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi dari HR</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>
+  <div class="form-hint">Tekan “Konfirmasi sudah dibaca” setelah membaca. HR akan melihat status baca pada riwayat pesan terkirim.</div>
+  ${msgs.length?msgs.map(m=>`<div class="message-card ${m.readAt?'':'unread'}"><div class="message-title">${vActEsc(m.subject||'Pesan HR')}</div><div class="message-meta">${vActEsc(m.date||'')} • Dari HR Corporate • ${m.readAt?'Sudah dikonfirmasi dibaca':'Belum dikonfirmasi dibaca'}</div><div class="message-body">${vActEsc(m.text||'')}</div>${m.readAt?'<div class="form-hint">✓ Status baca sudah terkirim ke HR.</div>':`<button class="btn" style="margin-top:8px" onclick="acknowledgeHRMessageV14('${String(m.id).replace(/'/g,'')}')">✓ Konfirmasi sudah dibaca</button>`}</div>`).join(''):'<div class="empty">Belum ada pesan pribadi dari HR.</div>'}`;
+}
+renderInboxPage=renderInboxPage_v14;
+/* Always refresh sender-side receipts from the backend before showing HR's sent list. */
+const _renderHRMessagesPage_v14=renderHRMessagesPage;
+renderHRMessagesPage=async function(){
+  if(String(state.activeProfile?.role||'').toLowerCase()==='hr' && GAS_URL){
+    try{await syncFromServer();}catch(e){console.warn('Sync status pesan HR gagal',e);}
+  }
+  return _renderHRMessagesPage_v14();
+};
+</script>
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
