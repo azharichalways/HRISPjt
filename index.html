@@ -574,14 +574,10 @@ function mapBootstrapToCaches(bs) {
   }
   if (Array.isArray(bs.activities)) {
     const byNik = {};
-    bs.activities.forEach(a => {
-      const nik = String(a.nik);
-      (byNik[nik] = byNik[nik] || []).push({ id: a.id, date: a.date, time: a.time || '', type: a.type, note: a.note, xpEarned: num_(a.xp_earned) });
-    });
-    Object.keys(byNik).forEach(nik => {
-      byNik[nik].sort((a, b) => (b.id || 0) - (a.id || 0));
-      localStorage.setItem('activities_' + nik, JSON.stringify(byNik[nik]));
-    });
+    const mappedActivities = bs.activities.map(a => ({ id:a.id, nik:idText_(a.nik), nama:a.nama||'', role:a.role||'', date:a.date, time:a.time||'', type:a.type, note:a.note, xpEarned:num_(a.xp_earned), xpRequested:num_(a.xp_requested), status:a.status||'Approved', reviewNote:a.review_note||'', reviewedBy:a.reviewed_by||'', reviewedAt:a.reviewed_at||'', createdAt:a.created_at||'' }));
+    localStorage.setItem('activities_all', JSON.stringify(mappedActivities));
+    mappedActivities.forEach(a => { const nik=String(a.nik); (byNik[nik]=byNik[nik]||[]).push(a); });
+    Object.keys(byNik).forEach(nik => { byNik[nik].sort((a,b)=>String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id))); localStorage.setItem('activities_'+nik,JSON.stringify(byNik[nik])); });
   }
 
   // GoodDeeds (Hal Baik)
@@ -4483,4 +4479,41 @@ submitMonthlyReport=async function(){const input=document.getElementById('leader
 <script id="hr-monthly-download-links-v1">
 const _renderHRMonthlyReportsPage_downloadV1=renderHRMonthlyReportsPage;
 renderHRMonthlyReportsPage=function(){_renderHRMonthlyReportsPage_downloadV1();const c=document.getElementById('content');if(!c)return;const cards=c.querySelectorAll('.report-card');cards.forEach((card)=>{if(card.querySelector('[data-report-downloads]'))return;const strong=card.querySelector('strong');const report=(state.monthlyReports||[]).find(r=>strong&&strong.textContent.includes(String(r.leaderName||''))&&strong.textContent.includes(String(r.month||'')));if(!report)return;const box=document.createElement('div');box.dataset.reportDownloads='1';box.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:8px';if(report.sourceFileUrl){const a=document.createElement('a');a.href=report.sourceFileUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📎 File Word Asli'+(report.sourceFileName?' — '+report.sourceFileName:'');box.appendChild(a);}if(report.reportDocUrl){const a=document.createElement('a');a.href=report.reportDocUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📝 Buka Word';box.appendChild(a);}if(report.reportFileUrl){const a=document.createElement('a');a.href=report.reportFileUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📄 Unduh PDF';box.appendChild(a);}if(box.children.length)card.appendChild(box);});};
+</script>
+
+
+<script id="activity-hr-approval-v1">
+function vActStatus(a){return String(a.status||'Approved').toLowerCase();}
+function vActLabel(a){const s=vActStatus(a);return s==='pending'?'⏳ Menunggu HR':s==='approved'?'✅ Diterima':s==='rejected'?'❌ Ditolak':s==='cancelled'?'↩️ Dibatalkan':a.status||'Tercatat';}
+function vActXp(type){const t=String(type||'').toLowerCase();if(t.includes('pelatihan'))return 100;if(t.includes('gathering'))return 50;if(t.includes('diskusi'))return 40;if(t.includes('badminton')||t.includes('olahraga'))return 30;return 30;}
+function vActEsc(x){return typeof v9Esc==='function'?v9Esc(String(x??'')):String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function submitActivity(){
+ const select=document.getElementById('actType');if(!select)return;const role=String(state.activeProfile?.role||'').toLowerCase(),type=select.value,typeLabel=select.options[select.selectedIndex]?.text||type,note=document.getElementById('actNote')?.value.trim()||'Tanpa catatan',xp=vActXp(type),id=String(Date.now()),now=new Date();
+ if(role==='hr'){
+   const res=await gasCall('addActivity',{id,type:typeLabel,note,date:now.toISOString().slice(0,10),xpRequested:xp});
+   if(!res?.ok){showToast('❌ Kegiatan gagal dicatat: '+(res?.message||res?.error||'coba lagi'));return;}
+   state.activeProfile={...state.activeProfile,...(res.user||{})};showToast('✅ Kegiatan HR dicatat. XP +'+xp);renderAgendaTab();return;
+ }
+ if(!GAS_URL){showToast('Koneksi server diperlukan agar pengajuan tercatat dan dapat dikonfirmasi HR.');return;}
+ if(!confirm('Kirim pilihan “'+typeLabel+'” ke HR untuk dikonfirmasi?\n\nJika diterima: +'+xp+' XP. Jika ditolak: -'+xp+' XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.'))return;
+ const btn=document.getElementById('btnSubmitAct');if(btn){btn.disabled=true;btn.textContent='⏳ Mengirim ke HR...';}
+ const res=await gasCall('addActivity',{id,type:typeLabel,note,date:now.toISOString().slice(0,10),xpRequested:xp});
+ if(btn){btn.disabled=false;btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}
+ if(!res?.ok){showToast('❌ Pengajuan gagal dikirim: '+(res?.message||res?.error||'coba lagi'));return;}
+ const arr=JSON.parse(localStorage.getItem('activities_'+state.activeProfile.nik)||'[]');arr.unshift({...res.activity,status:'Pending',xpRequested:xp,xpEarned:0});localStorage.setItem('activities_'+state.activeProfile.nik,JSON.stringify(arr));
+ const all=JSON.parse(localStorage.getItem('activities_all')||'[]');all.unshift({...res.activity,status:'Pending',xpRequested:xp,xpEarned:0});localStorage.setItem('activities_all',JSON.stringify(all));
+ showToast('📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');renderAgendaTab();
+}
+function renderActivityHistory(){
+ const list=document.getElementById('actHistoryList');if(!list)return;const acts=JSON.parse(localStorage.getItem('activities_'+state.activeProfile.nik)||'[]');state.activities=acts;
+ if(!acts.length){list.innerHTML='<div class="empty">Belum ada kegiatan tambahan yang dicatat.</div>';return;}
+ list.innerHTML=acts.map(a=>{const status=vActStatus(a),pending=status==='pending';return `<div class="hist-row" style="align-items:flex-start;gap:8px"><div class="l" style="min-width:0"><div class="d">${vActEsc(a.type)}</div><div class="s">${vActEsc(a.note||'Tanpa catatan')} • ${vActEsc(a.date||'')}</div><div class="s" style="margin-top:4px;font-weight:700">${vActLabel(a)}${pending?' • Potensi XP '+Number(a.xpRequested||vActXp(a.type)):status==='approved'?' • XP '+(Number(a.xpEarned)>0?'+'+a.xpEarned:a.xpEarned||0):status==='rejected'?' • XP '+(Number(a.xpEarned)||0):''}</div>${a.reviewNote?`<div class="s">Catatan HR: ${vActEsc(a.reviewNote)}</div>`:''}</div><div class="r" style="flex-shrink:0">${pending?`<button class="btn secondary" style="padding:6px 8px;font-size:10px" onclick="cancelMyActivityV1('${String(a.id).replace(/'/g,'')}')">Batalkan</button>`:''}</div></div>`;}).join('');
+}
+async function cancelMyActivityV1(id){if(!confirm('Batalkan pengajuan kegiatan ini sebelum diproses HR?'))return;const res=await gasCall('cancelActivity',{id});if(!res?.ok){showToast('❌ Tidak dapat membatalkan: '+(res?.message||res?.error||''));return;}const nik=String(state.activeProfile.nik),arr=JSON.parse(localStorage.getItem('activities_'+nik)||'[]').map(a=>String(a.id)===String(id)?{...a,status:'Cancelled',reviewNote:'Dibatalkan oleh Anda'}:a);localStorage.setItem('activities_'+nik,JSON.stringify(arr));localStorage.setItem('activities_all',JSON.stringify(JSON.parse(localStorage.getItem('activities_all')||'[]').map(a=>String(a.id)===String(id)?{...a,status:'Cancelled'}:a)));showToast('↩️ Pengajuan kegiatan dibatalkan.');renderAgendaTab();}
+async function decideActivityHRV1(id,decision){const note=prompt(decision==='approve'?'Catatan HR (opsional):':'Alasan penolakan (disarankan):','')||'';if(decision==='reject'&&!confirm('Tolak pengajuan ini? XP anggota akan dikurangi sesuai nilai kegiatan.'))return;const res=await gasCall('reviewActivity',{id,decision,note});if(!res?.ok){showToast('❌ Keputusan gagal disimpan: '+(res?.message||res?.error||''));return;}const all=JSON.parse(localStorage.getItem('activities_all')||'[]').map(a=>String(a.id)===String(id)?{...a,status:res.status,xpEarned:res.xpDelta,reviewNote:note,reviewedBy:state.activeProfile.nik}:a);localStorage.setItem('activities_all',JSON.stringify(all));showToast(res.status==='Approved'?'✅ Diterima. XP anggota +'+res.xpDelta:'❌ Ditolak. XP anggota '+res.xpDelta);renderAgendaTab();}
+const _renderAgendaSubTabContent_activityApprovalV1=renderAgendaSubTabContent;
+renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityApprovalV1();if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'||state.agendaSubTab!=='kegiatan')return;const c=document.getElementById('agendaSubTabContent');if(!c)return;const all=JSON.parse(localStorage.getItem('activities_all')||'[]'),pending=all.filter(a=>vActStatus(a)==='pending').sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||'')));const wrap=document.createElement('section');wrap.innerHTML=`<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota & Leader (${pending.length})</h2><div class="form-hint" style="margin-bottom:8px">Terima memberi XP sesuai jenis kegiatan. Tolak mengurangi XP dengan nilai yang sama. Anggota/Leader dapat membatalkan selama status masih menunggu.</div>${pending.length?pending.map(a=>`<div class="card" style="padding:10px;margin:7px 0"><div style="font-weight:800;font-size:12px">${vActEsc(a.nama||a.nik)} — ${vActEsc(a.type)}</div><div class="muted" style="font-size:10px;margin-top:4px">${vActEsc(a.role||'')} • ${vActEsc(a.date||'')} • Potensi XP ${Number(a.xpRequested||vActXp(a.type))}</div><div style="font-size:11px;margin-top:6px">${vActEsc(a.note||'Tanpa catatan')}</div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','approve')">✅ Terima (+${Number(a.xpRequested||vActXp(a.type))} XP)</button><button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','reject')">❌ Tolak (-${Number(a.xpRequested||vActXp(a.type))} XP)</button></div></div>`).join(''):'<div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div>'}`;c.prepend(wrap);};
+// Update text and instructions in the existing activity form without changing other agenda views.
+const _renderAgendaSubTabContent_activityFormV1=renderAgendaSubTabContent;
+renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityFormV1();if(state.agendaSubTab!=='kegiatan')return;const role=String(state.activeProfile?.role||'').toLowerCase(),c=document.getElementById('agendaSubTabContent');if(!c)return;const btn=document.getElementById('btnSubmitAct');if(role!=='hr'&&btn){btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}const card=c.querySelector('.card');if(card&&role!=='hr'&&!card.querySelector('.activity-approval-info')){const info=document.createElement('div');info.className='activity-approval-info';info.style.cssText='font-size:10.5px;line-height:1.5;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px;border-radius:8px;margin:8px 0';info.innerHTML='ℹ️ Sebelum dikirim, Anda bisa mengubah pilihan jenis kegiatan atau membatalkan pilihan. Setelah dikirim, status menunggu konfirmasi HR dan pengajuan masih dapat dibatalkan sebelum HR memutuskan. <strong>Diterima: +XP sesuai jenis kegiatan. Ditolak: -XP dengan nilai yang sama.</strong>';const sel=document.getElementById('actType');if(sel)sel.parentNode.insertBefore(info,sel.nextSibling);}};
 </script>
