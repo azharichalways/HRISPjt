@@ -493,7 +493,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz1tXVOCZaYEMLkMrtNrMSp3kfKhb6pv_srP2WmNGtk0MvDusKZvL9ig_gfAPz5ce16/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyHmmsux8vCrufFUzeS3Abm-7qgS4WwAIGekEljr10JTFH9EhMeCWUvRBEMlpBGQl9i/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -670,7 +670,7 @@ function mapBootstrapToCaches(bs) {
     const mapped = bs.monthlyReports.map(r => ({
       id: r.id, leaderNik: String(r.leader_nik), leaderName: r.leader_name, month: r.month,
       teamCount: num_(r.member_count), avgKpi: num_(r.avg_kpi), summary: r.summary,
-      date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || '', hrFeedback: r.hr_feedback || '', reportFileUrl: r.report_file_url || ''
+      date: r.created_at ? String(r.created_at).slice(0, 10) : '', hrReadAt: r.hr_read_at || null, hrReadBy: r.hr_read_by || '', hrFeedback: r.hr_feedback || '', reportFileUrl: r.report_file_url || '', reportDocUrl: r.report_doc_url || '', sourceFileUrl: r.source_file_url || '', sourceFileName: r.source_file_name || ''
     }));
     localStorage.setItem('monthly_reports_all', JSON.stringify(mapped));
   }
@@ -2783,7 +2783,7 @@ function renderAbsenTab(){
   const shift=SHIFTS[state.selectedShift]||SHIFTS.pagi;
   c.innerHTML=`<div id="locationBadge" class="location-badge invalid"><span>📍</span> Memeriksa Lokasi GPS...</div>
     ${off?`<div class="offday-box"><strong>🏖️ Hari Libur HR</strong><span>Hari libur HR tidak mengurangi XP atau Skor KPI.</span></div>`:`
-    <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>
+    <h2 class="section-title">Aksi Presensi</h2><div class="typechoice"><button class="${state.selectedType==='masuk'?'selected':''}" onclick="selectType('masuk')">Absen Masuk</button><button class="${state.selectedType==='pulang'?'selected':''}" onclick="selectType('pulang')">Absen Pulang</button></div>${isHr?`<label style="display:block;margin:10px 0 5px;font-size:11px;font-weight:700">Jenis Presensi HR</label><select id="hrAttendanceReason" onchange="toggleHROffsiteV1()" style="width:100%;padding:10px;border-radius:9px"><option value="kantor">Presensi di kantor (GPS wajib)</option><option value="Izin pribadi">Tidak masuk kantor — Izin pribadi</option><option value="Meeting di Luar">Tidak masuk kantor — Meeting di Luar</option><option value="Sakit">Tidak masuk kantor — Sakit</option></select><div id="hrOffsiteHint" class="form-hint">Untuk opsi di luar kantor, foto tetap wajib dan validasi GPS kantor dilewati.</div>`:``}
     ${isHr?`<h2 class="section-title">Shift HR</h2><div class="shift-picker"><div style="padding:10px 12px;font-size:12px;font-weight:800">Pagi • Senin–Jumat <span class="shift-current">${HR_WORK_SHIFT.start}–${HR_WORK_SHIFT.end}</span></div></div>`:`<h2 class="section-title">Shift Kerja</h2><div class="shift-picker" style="padding:12px;font-size:12px;font-weight:700">🗓️ Shift ditentukan otomatis dari jadwal karyawan terbaru.</div>`}
     <div id="cameraSlot"><div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas><div class="cam-tools"><button type="button" class="cam-ico" id="btnCamSwitch" title="Ganti kamera depan/belakang" aria-label="Ganti kamera depan/belakang" onclick="toggleCameraFacing()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button></div></div><button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto & Presensi</button></div><div id="resultSlot"></div>`}`;
   updateLocationBadgeUI(); if(!off)startCamera();
@@ -4124,6 +4124,21 @@ img[alt="Pratinjau foto presensi"],img[alt="Foto presensi"],img[alt="Foto yang d
 .att-rec{display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;border-left:3px solid;border-radius:6px;padding:4px 7px;margin:3px 0;font-size:11px;color:#243247}
 .att-rec b{font-size:10.5px}.att-rec .st{font-weight:800;margin-left:auto}.att-rec a{text-decoration:none;font-size:13px}
 </style>
+
+<style id="hr-compact-v1">
+/* HR workspace compact typography and spacing */
+#content .report-card,#content .monthly-report-btn,#content .repo-row{font-size:11px;padding:10px 12px;margin:7px 0;border-radius:12px}
+#content .report-card strong,#content .monthly-report-btn strong,#content .repo-row .timeline-title{font-size:12px}
+#content .report-card .timeline-meta,#content .monthly-report-btn .timeline-meta,#content .report-card .report-status{font-size:9.5px;line-height:1.35}
+#content .report-card .timeline-desc,#content .report-card [style*="line-height"]{font-size:10.5px;line-height:1.45;margin-top:5px}
+#content .v4-section-head{margin-bottom:9px;font-size:13px}
+#content .card label{margin:7px 0 4px;font-size:11px}
+#content #msgToNik{min-height:38px;width:100%}
+#content .hr-recipient-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:5px 0 8px}
+#content .hr-recipient-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:5px;max-height:220px;overflow:auto;padding:7px;border:1px solid var(--border);border-radius:10px}
+#content .hr-recipient-item{display:flex;align-items:center;gap:6px;padding:5px 7px;background:var(--surface,#fff);border-radius:7px;font-size:10.5px}
+#content .hr-recipient-item input{width:auto;margin:0}
+</style>
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
@@ -4369,4 +4384,48 @@ gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(actio
     try{await loadUserData();}catch(_){}
   };
 })();
+</script>
+
+<script id="hr-idea-review-fix-v1">
+const _decideIdeaByHR_v1 = decideIdeaByHR;
+decideIdeaByHR = async function(id,status){
+ const item=(state.ideas||[]).find(i=>String(i.id)===String(id)); if(!item){showToast('Ide tidak ditemukan.');return;}
+ const note=document.getElementById('hrNote_'+id)?.value.trim()||'';
+ if(!confirm(status==='HRAccepted'?'Konfirmasi menerima ide ini?':status==='HRRejected'?'Konfirmasi menolak ide ini?':'Tandai ide untuk kajian HR?'))return;
+ if(GAS_URL){const res=await gasCall('reviewIdeaHR',{id:item.id,status,note,reviewerNik:state.activeProfile.nik});if(!res?.ok){showToast('❌ Keputusan HR gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}}
+ const wasAccepted=!!item.hrAcceptedXpAwarded;item.status=status;item.hrNote=note||'-';item.hrReviewedAt=Date.now();item.slaStatus=status==='HRReview'?'Dalam Kajian HR':status==='HRAccepted'?'Diterima HR':'Ditolak HR';
+ if(status==='HRAccepted'&&!wasAccepted){item.hrAcceptedXpAwarded=true;if(!GAS_URL)addXpToUser(item.nik,V6_POLICY.ideaRewards.hrAccepted);}
+ localStorage.setItem('ideas_all',JSON.stringify(state.ideas));showToast(status==='HRAccepted'?'✅ Ide diterima HR.':'Keputusan HR berhasil disimpan.');renderIdeHalBaikHRTab();
+};
+</script>
+
+<script id="hr-bulk-message-v1">
+const _renderHRMessagesPage_v1=renderHRMessagesPage;
+renderHRMessagesPage=function(){
+ v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'&&u.active!==false),sent=state.privateMessages.filter(m=>String(m.fromNik||m.from_nik)===String(state.activeProfile.nik)).sort((a,b)=>String(b.id).localeCompare(String(a.id)));
+ c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi HR</strong></div><div class="card"><label>Penerima</label><div class="hr-recipient-tools"><input id="hrRecipientSearch" placeholder="Cari nama / NIK..." oninput="filterHRRecipientsV1()" style="flex:1;min-width:150px"><button class="btn secondary" type="button" onclick="selectHRRecipientsV1(true)">Pilih semua</button><button class="btn secondary" type="button" onclick="selectHRRecipientsV1(false)">Kosongkan</button></div><div id="hrRecipientList" class="hr-recipient-list">${recipients.map((u,i)=>`<label class="hr-recipient-item" data-search="${String((u.nama||'')+' '+(u.nik||'')).toLowerCase().replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"><input type="checkbox" class="hr-recipient-check" value="${String(u.nik)}" checked><span>${v9Esc(u.nama||u.nik)} <small>(${v9Esc(u.nik||'')})</small></span></label>`).join('')}</div><div class="form-hint"><span id="hrRecipientCount">${recipients.length}</span> penerima dipilih. Pilih satu atau beberapa karyawan, atau semua sekaligus.</div><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Informasi kebijakan perusahaan"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Tulis pesan untuk penerima yang dipilih..."></textarea><label>Bonus XP per penerima (opsional)</label><select id="msgXpBonus"><option value="0">Tanpa bonus XP</option>${v5XpOptions(20)}</select><button class="btn" onclick="sendHRPrivateMessageBulkV1()">📨 Kirim Pesan</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.slice(0,100).map(m=>`<div class="message-card"><div class="message-title">${v9Esc(m.subject||'Pesan HR')} → ${v9Esc(m.toName||m.to_name||m.toNik||m.to_nik||'Penerima')}</div><div class="message-meta">${v9Esc(m.date||'')} • ${(m.readAt||m.read_at)?'Sudah dibaca':'Belum dibaca'}</div><div class="message-body">${v9Esc(m.text||'')}</div></div>`).join(''):'<div class="empty">Belum ada pesan terkirim.</div>'}`;
+};
+function filterHRRecipientsV1(){const q=(document.getElementById('hrRecipientSearch')?.value||'').toLowerCase();document.querySelectorAll('#hrRecipientList .hr-recipient-item').forEach(el=>el.style.display=el.dataset.search.includes(q)?'flex':'none');}
+function selectHRRecipientsV1(value){document.querySelectorAll('#hrRecipientList .hr-recipient-item').forEach(el=>{if(el.style.display!=='none')el.querySelector('input').checked=value;});updateHRRecipientCountV1();}
+document.addEventListener('change',e=>{if(e.target?.classList?.contains('hr-recipient-check'))updateHRRecipientCountV1();});
+function updateHRRecipientCountV1(){const el=document.getElementById('hrRecipientCount');if(el)el.textContent=document.querySelectorAll('#hrRecipientList .hr-recipient-check:checked').length;}
+async function sendHRPrivateMessageBulkV1(){const toNiks=[...document.querySelectorAll('#hrRecipientList .hr-recipient-check:checked')].map(x=>x.value),subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=Number(document.getElementById('msgXpBonus').value)||0;if(!toNiks.length){showToast('Pilih minimal satu penerima.');return;}if(!text){showToast('Isi pesan terlebih dahulu.');return;}if(!confirm('Kirim pesan ini kepada '+toNiks.length+' karyawan?'))return;if(!GAS_URL){showToast('Koneksi server diperlukan agar pesan terkirim ke akun karyawan.');return;}const res=await gasCall('sendBulkPrivateMessage',{toNiks,subject,text,xpBonus});if(!res?.ok){showToast('❌ Pesan gagal dikirim: '+(res?.message||res?.error||'coba lagi'));return;}showToast('✅ Pesan berhasil dikirim ke '+res.count+' penerima.');renderHRMessagesPage();}
+</script>
+
+<script id="hr-offsite-attendance-v1">
+function toggleHROffsiteV1(){const reason=document.getElementById('hrAttendanceReason')?.value||'kantor';const badge=document.getElementById('locationBadge');if(badge){badge.style.display=reason==='kantor'?'':'none';}const hint=document.getElementById('hrOffsiteHint');if(hint)hint.textContent=reason==='kantor'?'Presensi kantor memerlukan GPS dalam radius kantor.':'Foto tetap wajib. Tag lokasi dan validasi GPS kantor tidak digunakan untuk jenis presensi ini.';}
+const _capturePhotoAndAbsen_offsiteV1=capturePhotoAndAbsen;
+capturePhotoAndAbsen=async function(){const isHr=state.activeProfile?.role==='hr',reason=isHr?(document.getElementById('hrAttendanceReason')?.value||'kantor'):'kantor';if(!isHr||reason==='kantor')return _capturePhotoAndAbsen_offsiteV1();if(isHr&&isHRNonWorkingDay()){showToast('Hari libur HR tidak memengaruhi XP atau KPI.');return;}const photo=capturePhotoDataUrl_();if(!photo){showToast('Foto wajib diambil. Pastikan kamera aktif.');return;}const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Menyimpan presensi...';}const res=await gasCall('addAttendance',{id:'ATT-'+Date.now(),type:state.selectedType,shift:'pagi',attendanceReason:reason,photoBase64:photo});if(!res?.ok){showToast('⛔ '+(res?.message||res?.error||'Gagal menyimpan presensi.'));if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}return;}showToast('✅ Presensi '+reason+' berhasil dicatat. Foto tersimpan tanpa tag lokasi.');state.activeProfile={...state.activeProfile,...(res.user||{})};if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto & Presensi';}renderAbsenTab();};
+</script>
+
+<script id="leader-monthly-word-upload-v1">
+const _renderMonthlyReportPage_wordV1=renderMonthlyReportPage;
+renderMonthlyReportPage=function(){_renderMonthlyReportPage_wordV1();const c=document.getElementById('content');if(!c||document.getElementById('leaderMonthlyWordFile'))return;const card=c.querySelector('.card');if(!card)return;const wrap=document.createElement('div');wrap.innerHTML='<label>File laporan mentah dari Microsoft Word (opsional)</label><input id="leaderMonthlyWordFile" type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><div class="form-hint">File .doc/.docx akan disimpan di Google Drive sebagai lampiran sumber untuk HR.</div>';const button=card.querySelector('button[onclick="submitMonthlyReport()"]');if(button)button.parentNode.insertBefore(wrap,button);};
+const _submitMonthlyReport_wordV1=submitMonthlyReport;
+submitMonthlyReport=async function(){const input=document.getElementById('leaderMonthlyWordFile'),file=input?.files?.[0];if(!file)return _submitMonthlyReport_wordV1();if(!/\.docx?$/i.test(file.name)){showToast('Pilih file Microsoft Word .doc atau .docx.');return;}if(file.size>6*1024*1024){showToast('Ukuran file maksimum 6 MB.');return;}if(!GAS_URL){showToast('Koneksi server diperlukan untuk mengirim file.');return;}const month=document.getElementById('reportMonth').value,summary=document.getElementById('monthlySummary').value.trim();if(!month||!summary){showToast('Bulan dan ringkasan laporan wajib diisi.');return;}const team=(state.allUsers||[]).filter(u=>String(u.leaderNik)===String(state.activeProfile.nik)),avg=team.length?Math.round(team.reduce((s,u)=>s+v4KpiScore(u.nik),0)/team.length):0;showToast('⏳ Mengunggah file Word...');const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});const upload=await gasCall('uploadLeaderMonthlySource',{fileName:file.name,base64:dataUrl,month});if(!upload?.ok){showToast('❌ File Word gagal diunggah: '+(upload?.message||upload?.error||'coba lagi'));return;}const res=await gasCall('addMonthlyReport',{id:Date.now(),leaderNik:state.activeProfile.nik,month,memberCount:team.length,avgKpi:avg,summary,sourceFileUrl:upload.url,sourceFileName:file.name});if(!res?.ok){showToast('File Word tersimpan, tetapi ringkasan laporan gagal dikirim: '+(res?.message||res?.error||''));return;}showToast('✅ Laporan dan file Word berhasil dikirim ke HR.');_renderMonthlyReportPage_wordV1();};
+</script>
+
+<script id="hr-monthly-download-links-v1">
+const _renderHRMonthlyReportsPage_downloadV1=renderHRMonthlyReportsPage;
+renderHRMonthlyReportsPage=function(){_renderHRMonthlyReportsPage_downloadV1();const c=document.getElementById('content');if(!c)return;const cards=c.querySelectorAll('.report-card');cards.forEach((card)=>{if(card.querySelector('[data-report-downloads]'))return;const strong=card.querySelector('strong');const report=(state.monthlyReports||[]).find(r=>strong&&strong.textContent.includes(String(r.leaderName||''))&&strong.textContent.includes(String(r.month||'')));if(!report)return;const box=document.createElement('div');box.dataset.reportDownloads='1';box.style.cssText='display:flex;gap:7px;flex-wrap:wrap;margin-top:8px';if(report.sourceFileUrl){const a=document.createElement('a');a.href=report.sourceFileUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📎 File Word Asli'+(report.sourceFileName?' — '+report.sourceFileName:'');box.appendChild(a);}if(report.reportDocUrl){const a=document.createElement('a');a.href=report.reportDocUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📝 Buka Word';box.appendChild(a);}if(report.reportFileUrl){const a=document.createElement('a');a.href=report.reportFileUrl;a.target='_blank';a.rel='noopener';a.className='btn secondary';a.textContent='📄 Unduh PDF';box.appendChild(a);}if(box.children.length)card.appendChild(box);});};
 </script>
