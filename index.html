@@ -4272,3 +4272,101 @@ renderHomeTab=function(){v1015PrevRenderHome();prefetchAttendanceHistoryV1015();
 const v1015PrevGasCall=gasCall;
 gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(action,payload);if(['addAttendance','reviewAttendanceCorrection','requestAttendanceCorrection'].includes(action)&&res?.ok){attHistoryCacheV1015={nik:'',records:null,at:0,promise:null};}return res;};
 </script>
+<script>
+/* V10.16: HR attendance reset with mandatory Drive backup and explicit scope selection. */
+(function(){
+  const previousRenderHRDashboard = renderHRDashboard;
+  window.renderHRDashboard = function(){
+    previousRenderHRDashboard();
+    const grid=document.querySelector('#content .home-grid');
+    if(!grid || grid.querySelector('[data-att-reset-tile]')) return;
+    const tile=document.createElement('button');
+    tile.className='home-tile'; tile.dataset.attResetTile='1';
+    tile.innerHTML='<div class="icon">🧹</div><div class="title">Reset Data Kehadiran</div><div class="desc">Pilih rentang tanggal dan karyawan. Backup dibuat sebelum data dihapus; XP tetap aman.</div>';
+    tile.onclick=()=>renderAttendanceResetAdmin();
+    grid.appendChild(tile);
+  };
+
+  function resetEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  window.renderAttendanceResetAdmin = function(){
+    if(!state.activeProfile || String(state.activeProfile.role||'').toLowerCase()!=='hr'){
+      alert('Fitur ini hanya tersedia untuk HR.'); return;
+    }
+    initUsers();
+    const users=(state.allUsers||[]).filter(u=>String(u.role||'').toLowerCase()!=='hr');
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+    const c=document.getElementById('content');
+    c.innerHTML=`
+      <div class="home-hero">
+        <div class="eyebrow">Administrasi HR</div><div class="title">Reset Data Kehadiran</div>
+        <div class="desc">Hanya baris pada sheet Attendance yang cocok dengan rentang tanggal dan pilihan karyawan yang akan dihapus. XP, profil, level/pencapaian, jadwal shift, agenda, dan data lain tidak diubah.</div>
+      </div>
+      <div class="card" style="padding:18px;margin:14px 0">
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <label style="flex:1;min-width:150px">Tanggal awal<input id="attResetStart" type="date" value="${today}" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #ccc;border-radius:8px"></label>
+          <label style="flex:1;min-width:150px">Tanggal akhir<input id="attResetEnd" type="date" value="${today}" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid #ccc;border-radius:8px"></label>
+        </div>
+        <label style="display:flex;gap:9px;align-items:center;margin:16px 0;font-weight:700"><input id="attResetAll" type="checkbox" checked onchange="toggleAttendanceResetEmployees()"> Semua karyawan dan Leader</label>
+        <div id="attResetEmployeePicker" style="display:none;border:1px solid #ddd;border-radius:10px;padding:12px;max-height:240px;overflow:auto">
+          <input id="attResetSearch" placeholder="Cari nama atau NIK..." oninput="filterAttendanceResetEmployees()" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;margin-bottom:10px">
+          ${users.map(u=>`<label class="att-reset-emp" data-search="${resetEsc((u.nama||'')+' '+(u.nik||'' )).toLowerCase()}" style="display:flex;gap:8px;padding:7px 2px;align-items:center"><input type="checkbox" class="att-reset-nik" value="${resetEsc(u.nik)}"><span>${resetEsc(u.nama||'Tanpa nama')} <small style="opacity:.7">(${resetEsc(u.nik)} • ${resetEsc(u.role)})</small></span></label>`).join('')}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn-primary" onclick="previewAttendanceResetUI()">Periksa Data yang Cocok</button>
+          <button class="btn" onclick="switchTab('home',true)">Kembali</button>
+        </div>
+        <div id="attResetResult" style="margin-top:16px"></div>
+      </div>
+    `;
+  };
+  window.toggleAttendanceResetEmployees=function(){
+    const all=document.getElementById('attResetAll'), picker=document.getElementById('attResetEmployeePicker');
+    if(picker)picker.style.display=all&&all.checked?'none':'block';
+  };
+  window.filterAttendanceResetEmployees=function(){
+    const q=(document.getElementById('attResetSearch')?.value||'').toLowerCase();
+    document.querySelectorAll('.att-reset-emp').forEach(el=>el.style.display=el.dataset.search.includes(q)?'flex':'none');
+  };
+  function getResetPayload(){
+    const all=document.getElementById('attResetAll')?.checked===true;
+    return {startDate:document.getElementById('attResetStart')?.value||'',endDate:document.getElementById('attResetEnd')?.value||'',allEmployees:all,niks:all?[]:[...document.querySelectorAll('.att-reset-nik:checked')].map(el=>el.value)};
+  }
+  window.previewAttendanceResetUI=async function(){
+    const box=document.getElementById('attResetResult'); if(!box)return;
+    const payload=getResetPayload();
+    if(!payload.startDate||!payload.endDate||payload.startDate>payload.endDate){box.innerHTML='<p style="color:#b42318">Periksa tanggal awal dan akhir.</p>';return;}
+    if(!payload.allEmployees&&!payload.niks.length){box.innerHTML='<p style="color:#b42318">Pilih minimal satu karyawan atau centang semua karyawan.</p>';return;}
+    box.innerHTML='<p>Memeriksa data...</p>';
+    const res=await gasCall('previewAttendanceReset',payload);
+    if(!res||!res.ok){box.innerHTML='<p style="color:#b42318">'+resetEsc(res?.message||res?.error||'Gagal memeriksa data.')+'</p>';return;}
+    box.innerHTML=`<div style="padding:12px;border:1px solid #d0d5dd;border-radius:10px">
+      <strong>Pratinjau reset</strong><p>Rentang: ${resetEsc(res.startDate)} s.d. ${resetEsc(res.endDate)}</p>
+      <p>Jumlah karyawan dalam cakupan: <b>${Number(res.selectedCount||0)}</b></p>
+      <p>Jumlah karyawan yang memiliki data cocok: <b>${Number(res.affectedEmployees||0)}</b></p>
+      <p>Baris kehadiran yang akan dihapus: <b>${Number(res.attendanceRows||0)}</b></p>
+      <p style="color:#067647">XP dan data non-presensi tidak akan diubah. Backup Google Sheets akan dibuat terlebih dahulu.</p>
+      <button class="btn btn-danger" id="attResetConfirmBtn" onclick="confirmAttendanceResetUI()">Backup & Reset Sekarang</button>
+      <div id="attResetFinalResult" style="margin-top:10px"></div></div>`;
+  };
+  window.confirmAttendanceResetUI=async function(){
+    const payload=getResetPayload();
+    const preview=await gasCall('previewAttendanceReset',payload);
+    if(!preview?.ok){alert(preview?.message||preview?.error||'Tidak dapat memvalidasi ulang.');return;}
+    if(!preview.attendanceRows){alert('Tidak ada data yang cocok. Tidak ada yang dihapus.');return;}
+    const scope=payload.allEmployees?'SEMUA karyawan dan Leader':payload.niks.length+' karyawan terpilih';
+    const ok=confirm(`PERINGATAN: ${preview.attendanceRows} baris presensi untuk ${scope} pada ${payload.startDate} s.d. ${payload.endDate} akan dihapus.\n\nBackup wajib dibuat sebelum penghapusan. XP dan data non-presensi dipertahankan.\n\nLanjutkan?`);
+    if(!ok)return;
+    const btn=document.getElementById('attResetConfirmBtn');if(btn){btn.disabled=true;btn.textContent='Membuat backup dan mereset...';}
+    const result=document.getElementById('attResetFinalResult');if(result)result.textContent='Memproses...';
+    const res=await gasCall('resetAttendanceRange',payload);
+    if(!res?.ok){
+      if(result)result.innerHTML='<p style="color:#b42318">'+resetEsc(res?.message||res?.error||'Reset gagal. Data tidak seharusnya dihapus jika backup gagal.')+'</p>';
+      if(btn){btn.disabled=false;btn.textContent='Backup & Reset Sekarang';} return;
+    }
+    if(result)result.innerHTML=`<p><b>Selesai.</b> ${Number(res.deleted||0)} baris dihapus.</p><p>Backup: <a href="${resetEsc(res.backupUrl||'#')}" target="_blank" rel="noopener">Buka file backup Google Sheets</a></p><p>XP dan data non-presensi dipertahankan.</p>`;
+    if(btn){btn.disabled=true;btn.textContent='Reset selesai';}
+    // Refresh bootstrap so cached attendance and dashboard data are refreshed.
+    try{await loadUserData();}catch(_){}
+  };
+})();
+</script>
