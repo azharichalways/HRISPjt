@@ -493,7 +493,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyHmmsux8vCrufFUzeS3Abm-7qgS4WwAIGekEljr10JTFH9EhMeCWUvRBEMlpBGQl9i/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzMuGGAOpGo0X2yBTT21V359DdUnSk6vOWrIdb6kDrThnXxPc1AA7D7lpWmdqpDvwIH/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -501,7 +501,7 @@ async function gasCall(action, payload = {}) {
   if (!GAS_URL) return { ok:false, error:'GAS_URL belum diisi.' };
   const token = sessionStorage.getItem('ag_session_token') || '';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), action === 'addAttendance' ? 15000 : 12000);
+  const timeout = setTimeout(() => controller.abort(), action === 'addAttendance' ? 45000 : 12000);
   try {
     const res = await fetch(GAS_URL, {
       method:'POST',
@@ -769,21 +769,13 @@ function initLocationWatcher() {
 }
 
 function updateLocationBadgeUI() {
+  // Jadwal shift karyawan ditentukan backend, sehingga frontend tidak boleh
+  // menampilkan peringatan geofence berdasarkan state.selectedShift yang belum otoritatif.
+  // Backend tetap menegakkan radius untuk shift kantor dan mengecualikan shift malam.
   const badge = document.getElementById('locationBadge');
   if (!badge) return;
-  if (state.selectedShift === 'malam') {
-    badge.className = 'location-badge valid';
-    badge.innerHTML = `<span>🌙</span> <strong>Shift Malam:</strong> Bebas Lokasi Kantor`;
-  } else if (state.distanceToOffice === null) {
-    badge.className = 'location-badge invalid';
-    badge.innerHTML = `<span>📍</span> GPS Mencari Lokasi... (Harap Izinkan GPS)`;
-  } else if (state.distanceToOffice <= (state.officeConfig?.maxDistance || 300)) {
-    badge.className = 'location-badge valid';
-    badge.innerHTML = `<span>🟢</span> Lokasi Valid: <strong>${state.distanceToOffice}m</strong> dari kantor`;
-  } else {
-    badge.className = 'location-badge invalid';
-    badge.innerHTML = `<span>⛔</span> Di Luar Jangkauan: <strong>${state.distanceToOffice}m</strong> (Maks 300m)`;
-  }
+  badge.className = 'location-badge valid';
+  badge.innerHTML = `<span>📍</span> <strong>Validasi lokasi mengikuti jadwal shift</strong>`;
 }
 
 function initUsers() {
@@ -3853,16 +3845,27 @@ capturePhotoAndAbsen = function(){
   const isHr=state.activeProfile.role==='hr';
   if(isHr&&isHRNonWorkingDay()){showToast('🏖️ Hari libur HR tidak memengaruhi XP atau KPI.');return;}
   if(isHr)state.selectedShift='pagi';
-  if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
-  if(state.distanceToOffice>(state.officeConfig?.maxDistance||300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas ${state.officeConfig?.maxDistance||300}m.`);return;}
+  // Jangan memutuskan geofence di frontend karena selectedShift tidak otoritatif
+  // (jadwal shift sebenarnya dibaca backend dari spreadsheet). Backend akan
+  // melewati geofence untuk shift malam dan tetap memvalidasi shift lain.
   const photo=capturePhotoDataUrl_();if(!photo){showToast('⚠️ Foto belum siap. Pastikan kamera aktif.');return;}
   const btn=document.getElementById('btnCapture');if(btn){btn.disabled=true;btn.textContent='⏳ Foto diambil • menyimpan di latar belakang…';}
   const slot=document.getElementById('cameraSlot');
   // UI langsung merespons setelah capture; proses Drive/Sheets berjalan asynchronous.
   if(slot)slot.innerHTML=`<div class="card" style="text-align:center;padding:12px"><img src="${photo}" alt="Pratinjau foto presensi" style="width:min(100%,220px);aspect-ratio:3/4;object-fit:cover;border-radius:12px;border:1px solid #cbd5e1"><div style="font-weight:800;margin-top:8px">📸 Foto berhasil diambil</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">Presensi sedang disimpan. Jangan tutup aplikasi dulu.</div><div class="v1022-busy" style="margin:10px auto;width:24px;height:24px;border:3px solid #dbeafe;border-top-color:#2563eb;border-radius:50%"></div></div>`;
-  const payload={id:'ATT-'+Date.now()+'-'+String(state.activeProfile.nik),type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,accuracy:state.coords.accuracy||0,photoBase64:photo};
+  // Pertahankan ID transaksi selama 30 menit. Jika koneksi timeout setelah server
+  // menyimpan data, percobaan ulang akan meminta hasil transaksi yang sama, bukan membuat absen baru.
+  const pendingKey='ag_pending_attendance_'+String(state.activeProfile.nik)+'_'+String(state.selectedType);
+  let pending=null;
+  try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');}catch(_){pending=null;}
+  if(!pending||!pending.id||pending.type!==state.selectedType||!pending.createdAt||Date.now()-Number(pending.createdAt)>30*60*1000){
+    pending={id:'ATT-'+Date.now()+'-'+String(state.activeProfile.nik)+'-'+String(state.selectedType),type:state.selectedType,createdAt:Date.now()};
+  }
+  sessionStorage.setItem(pendingKey,JSON.stringify(pending));
+  const payload={id:pending.id,type:state.selectedType,lat:state.coords.lat,lng:state.coords.lng,accuracy:(state.coords.accuracy||0),photoBase64:photo};
   gasCall('addAttendance',payload).then(res=>{
-    if(!res||!res.ok){showToast('⛔ '+(res?.message||res?.error||'Presensi gagal disimpan. Silakan coba kembali.'));if(slot)slot.innerHTML=`<div class="card rejected-border" style="text-align:center"><div style="font-weight:800">Presensi belum tersimpan</div><img src="${photo}" alt="Foto yang diambil" style="width:100px;height:130px;object-fit:cover;border-radius:10px;margin:8px auto"><button class="btn" onclick="renderAbsenTab()">Coba Lagi</button></div>`;return;}
+    if(!res||!res.ok){showToast('⛔ '+(res?.message||res?.error||'Status presensi belum dapat dipastikan. Periksa riwayat sebelum mencoba lagi.'));if(slot)slot.innerHTML=`<div class="card rejected-border" style="text-align:center"><div style="font-weight:800">Presensi belum terkonfirmasi</div><div style="font-size:12px;margin:6px 0">Jika koneksi terputus, periksa riwayat presensi sebelum mencoba lagi.</div><img src="${photo}" alt="Foto yang diambil" style="width:100px;height:130px;object-fit:cover;border-radius:10px;margin:8px auto"><button class="btn" onclick="renderAbsenTab()">Periksa / Coba Lagi</button></div>`;return;}
+    sessionStorage.removeItem(pendingKey);
     const r=res.record;state.activeProfile={...state.activeProfile,...res.user};sessionStorage.setItem('active_user_session',JSON.stringify(state.activeProfile));
     const localRecord={id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:r.lat,lng:r.lng,xpEarned:num_(r.xp_earned),role:r.role,photo,photoUrl:r.photo_url};
     state.records.unshift(localRecord);localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));updateGamifyBar();stopCamera();fireConfetti();
