@@ -4260,6 +4260,9 @@ renderHRMessagesPage=async function(){
   return _renderHRMessagesPage_v14();
 };
 </script>
+
+
+
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
@@ -4433,6 +4436,7 @@ gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(actio
     const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
     const c=document.getElementById('content');
     c.innerHTML=`
+      <div class="v4-section-head"><strong>🧹 Reset Data Kehadiran</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Kembali ke Menu Reset</button></div>
       <div class="home-hero">
         <div class="eyebrow">Administrasi HR</div><div class="title">Reset Data Kehadiran</div>
         <div class="desc">Hanya baris pada sheet Attendance yang cocok dengan rentang tanggal dan pilihan karyawan yang akan dihapus. XP, profil, level/pencapaian, jadwal shift, agenda, dan data lain tidak diubah.</div>
@@ -4449,7 +4453,7 @@ gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(actio
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
           <button class="btn btn-primary" onclick="previewAttendanceResetUI()">Periksa Data yang Cocok</button>
-          <button class="btn" onclick="switchTab('home',true)">Kembali</button>
+          <button class="btn" onclick="renderHRResetMenuV2()">Kembali ke Menu Reset</button>
         </div>
         <div id="attResetResult" style="margin-top:16px"></div>
       </div>
@@ -4732,7 +4736,7 @@ async function renderHrisFullResetPageV1(){
     LeaderNotes:'Catatan Leader', MonthlyReports:'Laporan bulanan', HrAgendaDone:'Status pengingat HR'
   };
   const rows = Object.keys(res.tables || {}).map(k => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7"><span>${labels[k] || resetHrisEscV1(k)}</span><strong>${Number(res.tables[k] || 0)}</strong></div>`).join('');
-  c.innerHTML = `<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>
+  c.innerHTML = `<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Menu Reset</button></div>
     <div class="card" style="border:1px solid #fecaca;background:#fffafa;padding:14px">
       <div style="font-size:14px;font-weight:800;color:#991b1b">⚠️ Tindakan permanen</div>
       <p style="font-size:11px;line-height:1.6;color:#475569">Fitur ini menghapus data operasional seluruh pengguna. Sebelum penghapusan, sistem membuat salinan penuh spreadsheet di Google Drive. Jangan jalankan saat ada proses presensi atau input data yang sedang berlangsung.</p>
@@ -4779,3 +4783,43 @@ async function confirmHrisFullResetV1(){
 }
 </script>
 
+<script id="hris-combined-reset-menu-v2">
+/* Satukan Reset Total dan Reset Data Kehadiran di satu pintu HR.
+   Menu dirender lokal tanpa RPC; preview baru diminta setelah HR memilih Reset Total. */
+(function(){
+  const priorDashboard = renderHRDashboard;
+  window.renderHRDashboard = function(){
+    priorDashboard();
+    const c=document.getElementById('content'); if(!c)return;
+    c.querySelectorAll('[data-att-reset-tile],[data-hris-full-reset-v1]').forEach(el=>el.remove());
+    c.querySelectorAll('.home-tile').forEach(el=>{
+      const t=el.querySelector('.title');
+      if(t && /^(Reset Data Kehadiran|Reset Total HRIS)$/.test(t.textContent.trim())) el.remove();
+    });
+    const grid=c.querySelector('.home-grid');
+    if(grid && !grid.querySelector('[data-combined-reset-menu-v2]')){
+      const tile=document.createElement('button'); tile.className='home-tile';
+      tile.dataset.combinedResetMenuV2='1';
+      tile.innerHTML='<div class="icon">🧰</div><div class="title">Menu Reset Data</div><div class="desc">Reset kehadiran atau reset total HRIS dalam satu tempat.</div>';
+      tile.onclick=window.renderHRResetMenuV2;
+      grid.appendChild(tile);
+    }
+  };
+  window.renderHRResetMenuV2=function(){
+    if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'){showToast('Akses khusus HR.');return;}
+    const c=document.getElementById('content'); if(!c)return;
+    c.innerHTML=`<div class="v4-section-head"><strong>🧰 Menu Reset Data</strong><button class="v4-back" onclick="renderHRDashboard()">← Beranda HR</button></div>
+      <div class="home-hero"><div class="eyebrow">Administrasi HR</div><div class="title">Pilih jenis reset</div><div class="desc">Kedua tindakan membuat backup sebelum menghapus data. Periksa cakupan sebelum melanjutkan.</div></div>
+      <div class="home-grid" style="margin-top:12px">
+        <button class="home-tile" onclick="renderAttendanceResetAdmin()"><div class="icon">🧹</div><div class="title">Reset Data Kehadiran</div><div class="desc">Hapus presensi berdasarkan rentang tanggal dan pilihan karyawan. XP dan data lain tetap aman.</div></button>
+        <button class="home-tile" onclick="renderHrisFullResetPageV2()"><div class="icon">♻️</div><div class="title">Reset Total HRIS</div><div class="desc">Bersihkan data operasional, reset XP dan streak. Users dan roster dipertahankan.</div></button>
+      </div>`;
+  };
+  window.renderHrisFullResetPageV2=function(){
+    // Render loading state immediately; fetch preview only after user opens this option.
+    const c=document.getElementById('content'); if(!c)return;
+    c.innerHTML='<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Menu Reset</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
+    renderHrisFullResetPageV1();
+  };
+})();
+</script>
