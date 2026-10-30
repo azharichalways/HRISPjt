@@ -501,7 +501,7 @@ async function gasCall(action, payload = {}) {
   if (!GAS_URL) return { ok:false, error:'GAS_URL belum diisi.' };
   const token = sessionStorage.getItem('ag_session_token') || '';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), action === 'addAttendance' ? 45000 : 12000);
+  const timeout = setTimeout(() => controller.abort(), action === 'resetAllHrisData' ? 90000 : (action === 'addAttendance' ? 45000 : 12000));
   try {
     const res = await fetch(GAS_URL, {
       method:'POST',
@@ -555,6 +555,12 @@ function mapBootstrapToCaches(bs) {
       role: idText_(su.role).toLowerCase()
     }));
     localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+    // Sinkronisasi bootstrap juga mengosongkan cache per-user yang mungkin masih berisi
+    // riwayat lama setelah HR menjalankan Reset Total HRIS.
+    state.allUsers.forEach(u => {
+      localStorage.setItem('records_' + String(u.nik), '[]');
+      localStorage.setItem('activities_' + String(u.nik), '[]');
+    });
   }
 
   // Records & Activities: per-nik, dikelompokkan dulu sebelum ditulis ke masing-masing cache 'records_<nik>' / 'activities_<nik>'.
@@ -4687,3 +4693,89 @@ capturePhotoAndAbsen = async function(){
   return _capturePhotoAndAbsenBeforeSKTV1();
 };
 </script>
+
+<script id="hris-full-reset-v1">
+/* Reset Total HRIS khusus HR. Roster dan akun Users dipertahankan. */
+const _hrDashboardBeforeFullResetV1 = renderHRDashboard;
+renderHRDashboard = function(){
+  _hrDashboardBeforeFullResetV1();
+  const c = document.getElementById('content');
+  if (!c) return;
+  // Agenda & Broadcast tidak lagi ditampilkan sebagai menu/shortcut di beranda HR.
+  c.querySelectorAll('.hr-agenda-notice').forEach(el => el.remove());
+  c.querySelectorAll('.home-tile').forEach(el => {
+    const title = el.querySelector('.title');
+    if (title && title.textContent.trim() === 'Agenda & Broadcast') el.remove();
+  });
+  const grid = c.querySelector('.home-grid');
+  if (grid && !grid.querySelector('[data-hris-full-reset-v1]')) {
+    const btn = document.createElement('button');
+    btn.className = 'home-tile';
+    btn.setAttribute('data-hris-full-reset-v1', '1');
+    btn.innerHTML = '<div class="icon">♻️</div><div class="title">Reset Total HRIS</div><div class="desc">Kosongkan data operasional, pertahankan Users dan roster.</div>';
+    btn.onclick = renderHrisFullResetPageV1;
+    grid.appendChild(btn);
+  }
+};
+
+async function renderHrisFullResetPageV1(){
+  if (String(state.activeProfile?.role || '').toLowerCase() !== 'hr') { showToast('Akses khusus HR.'); return; }
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
+  const res = await gasCall('previewFullHrisReset', {});
+  if (!res?.ok) { c.innerHTML = '<div class="v4-section-head"><strong>Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="color:#b42318">' + resetHrisEscV1(res?.message || res?.error || 'Gagal memeriksa data.') + '</div>'; return; }
+  const labels = {
+    Attendance:'Riwayat presensi', AttendanceCorrections:'Pengajuan koreksi presensi',
+    Activities:'Aktivitas', GoodDeeds:'Kontribusi / hal baik', Ideas:'Ide',
+    Leaves:'Pengajuan cuti / libur', Announcements:'Broadcast', Agendas:'Agenda',
+    AgendaStatus:'Status kehadiran agenda', PrivateMessages:'Pesan pribadi',
+    LeaderNotes:'Catatan Leader', MonthlyReports:'Laporan bulanan', HrAgendaDone:'Status pengingat HR'
+  };
+  const rows = Object.keys(res.tables || {}).map(k => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7"><span>${labels[k] || resetHrisEscV1(k)}</span><strong>${Number(res.tables[k] || 0)}</strong></div>`).join('');
+  c.innerHTML = `<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>
+    <div class="card" style="border:1px solid #fecaca;background:#fffafa;padding:14px">
+      <div style="font-size:14px;font-weight:800;color:#991b1b">⚠️ Tindakan permanen</div>
+      <p style="font-size:11px;line-height:1.6;color:#475569">Fitur ini menghapus data operasional seluruh pengguna. Sebelum penghapusan, sistem membuat salinan penuh spreadsheet di Google Drive. Jangan jalankan saat ada proses presensi atau input data yang sedang berlangsung.</p>
+      <div style="font-weight:800;font-size:12px;margin:12px 0 5px">Data yang akan dibersihkan</div>${rows}
+      <div style="display:flex;justify-content:space-between;padding:9px 0;font-weight:800"><span>Total baris data operasional</span><span>${Number(res.operationalRows || 0)}</span></div>
+    </div>
+    <div class="card" style="padding:14px;margin-top:10px">
+      <div style="font-weight:800;font-size:12px;margin-bottom:8px">Data yang dipertahankan</div>
+      <ul style="font-size:11px;line-height:1.8;padding-left:18px;margin:0">
+        <li><strong>Users (${Number(res.userCount || 0)} akun)</strong>: NIK, nama, username/kode unik, password, role, status, dan relasi tetap ada. XP dan streak menjadi 0.</li>
+        <li><strong>Roster (${Number(res.rosterRows || 0)} baris)</strong>: jadwal internal dan jadwal shift eksternal tidak dihapus.</li>
+        <li>Settings, hari libur, dan Audit Log tetap dipertahankan.</li>
+      </ul>
+      <div style="font-size:10px;color:#64748b;margin-top:10px">Backup penuh dibuat terlebih dahulu. Jika backup gagal, proses reset dibatalkan.</div>
+      <button id="btnHrisFullResetV1" class="btn btn-danger" style="width:100%;margin-top:14px" onclick="confirmHrisFullResetV1()">Backup & Reset Total HRIS</button>
+      <div id="hrisFullResetResultV1" style="margin-top:10px"></div>
+    </div>`;
+}
+
+function resetHrisEscV1(v){return String(v ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+
+async function confirmHrisFullResetV1(){
+  if (String(state.activeProfile?.role || '').toLowerCase() !== 'hr') { showToast('Akses khusus HR.'); return; }
+  const ok = confirm('PERINGATAN: Seluruh data operasional semua pengguna akan dihapus. Users tetap ada, tetapi XP dan streak menjadi 0. Roster, Settings, dan hari libur dipertahankan. Backup penuh akan dibuat terlebih dahulu. Lanjutkan?');
+  if (!ok) return;
+  const typed = prompt('Untuk mengonfirmasi, ketik persis: RESET TOTAL');
+  if (typed !== 'RESET TOTAL') { showToast('Reset dibatalkan. Teks konfirmasi tidak cocok.'); return; }
+  const btn = document.getElementById('btnHrisFullResetV1');
+  const result = document.getElementById('hrisFullResetResultV1');
+  if (btn) { btn.disabled = true; btn.textContent = 'Membuat backup dan mereset…'; }
+  if (result) result.textContent = 'Memproses reset. Jangan tutup halaman…';
+  const res = await gasCall('resetAllHrisData', {confirmation:typed});
+  if (!res?.ok) {
+    if (result) result.innerHTML = '<div style="color:#b42318;font-size:11px">Reset gagal: ' + resetHrisEscV1(res?.message || res?.error || 'Terjadi kesalahan.') + '</div>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Backup & Reset Total HRIS'; }
+    return;
+  }
+  // Tarik snapshot baru agar XP, streak, presensi, dan seluruh daftar yang tampil ikut bersih.
+  await syncFromServer();
+  updateGamifyBar();
+  if (result) result.innerHTML = `<div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:11px;font-size:11px;color:#166534"><strong>✅ Reset Total HRIS berhasil.</strong><p>${Number(res.usersPreserved || 0)} akun Users dipertahankan. XP dan streak seluruh pengguna = 0. Roster tetap utuh.</p><p>Backup penuh: <a href="${resetHrisEscV1(res.backupUrl)}" target="_blank" rel="noopener">${resetHrisEscV1(res.backupName || 'Buka backup Google Sheets')}</a></p><p>Data operasional yang dibersihkan:</p><ul>${Object.entries(res.cleared || {}).map(([k,v]) => `<li>${resetHrisEscV1(k)}: ${Number(v || 0)} baris</li>`).join('')}</ul></div>`;
+  if (btn) { btn.disabled = true; btn.textContent = 'Reset selesai'; }
+  showToast('✅ Reset Total HRIS selesai. Users dan roster dipertahankan.');
+}
+</script>
+
