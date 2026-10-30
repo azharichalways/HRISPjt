@@ -804,9 +804,11 @@ function initData() {
     if (GAS_URL) {
       syncFromServer().then(success => {
         if (success) {
+          // Sinkronisasi latar belakang hanya memperbarui data/cache.
+          // Jangan memanggil switchTab di sini: pengguna mungkin sedang berada
+          // di subhalaman (mis. form HR), bukan di dashboard tab utama.
           loadUserData();
           renderBroadcastBanner();
-          switchTab(state.currentTab || 'home', false);
         }
       });
     }
@@ -3973,9 +3975,10 @@ async function submitAttendanceCorrectionV1011(attendanceId){
  const res=await gasCall('requestAttendanceCorrection',{attendanceId,requestedTime,requestedShift,reason});if(!res?.ok){showToast('Gagal mengirim: '+(res?.message||res?.error||'error'));return;}showToast(res.message||'Pengajuan terkirim.');renderAttendanceHistoryV1011();
 }
 async function renderAttendanceCorrectionsV1011(){
+ const navToken=window.__hrisNavSeq||0;
  const c=document.getElementById('content'),role=String(state.activeProfile.role||'').toLowerCase();
  c.innerHTML='<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">Memuat pengajuan dari server…</div></div>';
- const res=await gasCall('getAttendanceCorrections',{});if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat: ${escAttV1011(res?.message||res?.error||'error')}</div>`;return;}
+ const res=await gasCall('getAttendanceCorrections',{});if(navToken!==(window.__hrisNavSeq||0))return;if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat: ${escAttV1011(res?.message||res?.error||'error')}</div>`;return;}
  const list=(res.corrections||[]).filter(x=>x.status==='Pending');
  c.innerHTML=`<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">${list.length} pengajuan menunggu keputusan.</div></div>${list.length?list.map(x=>`<div class="card" style="margin-bottom:10px"><strong>${escAttV1011(x.nama)} • ${escAttV1011(x.attendance_date)}</strong><div class="timeline-desc">Catatan ${escAttV1011(x.attendance_id)} · diminta ${escAttV1011(x.requested_time)} / shift ${escAttV1011(x.requested_shift)}</div><p>${escAttV1011(x.reason)}</p><label>Catatan peninjau</label><textarea id="attReviewNote_${escAttV1011(x.id)}" rows="2" placeholder="Catatan (opsional)"></textarea><div style="display:flex;gap:8px"><button class="btn" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Approved')">Setujui</button><button class="btn secondary" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Rejected')">Tolak</button></div></div>`).join(''):'<div class="card">Tidak ada pengajuan koreksi yang menunggu keputusan.</div>'}`;
 }
@@ -4383,10 +4386,13 @@ async function loadAttendanceHistoryV1015(force=false){
 }
 function prefetchAttendanceHistoryV1015(){if(!attHistoryNikV1015())return;loadAttendanceHistoryV1015(false).catch(()=>{});}
 async function renderAttendanceHistoryV1011(monthFilter,selectedDate){
+ const navToken=window.__hrisNavSeq||0;
  const c=document.getElementById('content');if(!c)return;
  const cached=attHistoryCacheV1015.nik===attHistoryNikV1015()&&Array.isArray(attHistoryCacheV1015.records);
  if(!cached)c.innerHTML='<div class="home-hero"><div class="title">Kehadiran Saya</div><div class="desc">Memuat data pertama kali…</div></div>';
- const res=await loadAttendanceHistoryV1015(false);if(!res||!res.ok){if(!cached)c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
+ const res=await loadAttendanceHistoryV1015(false);
+ if(navToken!==(window.__hrisNavSeq||0))return;
+ if(!res||!res.ok){if(!cached)c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
  const all=(res.records||[]).slice().sort((a,b)=>attDateKeyV1013(a.date).localeCompare(attDateKeyV1013(b.date))||attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));
  const today=new Date();const current=monthFilter||`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;const records=all.filter(r=>attDateKeyV1013(r.date).startsWith(current));
  const groups={};records.forEach(r=>{const d=attDateKeyV1013(r.date);if(d)(groups[d]||(groups[d]=[])).push(r);});
@@ -4595,9 +4601,11 @@ renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityFormV1()
 <script id="nightAttendanceReviewV1">
 // HR-only queue: shift malam yang tidak absen dan kegagalan baca jadwal tidak otomatis menjadi Alpha.
 async function renderNightAttendanceReviewsV1(){
+ const navToken=window.__hrisNavSeq||0;
  const c=document.getElementById('content');if(!c)return;
  c.innerHTML='<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">Memuat catatan yang memerlukan keputusan HR…</div></div>';
  const res=await gasCall('getPendingAttendanceReviews',{});
+ if(navToken!==(window.__hrisNavSeq||0))return;
  if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat pemeriksaan: ${v101Esc(res?.message||res?.error||'Kesalahan koneksi')}<button class="btn secondary" onclick="renderHRDashboard()">Kembali</button></div>`;return;}
  const rows=res.records||[];
  c.innerHTML=`<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">${rows.length} catatan menunggu keputusan. Tidak ada potongan XP sebelum HR memutuskan.</div></div><div class="att-actions"><button class="btn secondary" onclick="renderHRDashboard()">← Kembali</button></div>${rows.length?rows.map(r=>`<article class="card" style="margin:10px 0;padding:12px"><strong>${v101Esc(r.nama||r.nik)} • ${v101Esc(r.date||'')}</strong><div class="muted" style="font-size:11px;margin-top:5px">NIK ${v101Esc(r.nik||'—')} · Shift ${v101Esc(r.shift||'—')} · Status ${v101Esc(r.status_text||'—')}</div><div style="font-size:11px;line-height:1.5;margin-top:7px;overflow-wrap:anywhere">${v101Esc(String(r.source||'Menunggu pemeriksaan').replace(/^scheduleReadFailedMaintenance:/,'Gagal membaca jadwal: '))}</div><label style="display:block;margin-top:8px;font-size:11px">Catatan HR (opsional)</label><input id="nightReviewNote_${v101Esc(r.id)}" placeholder="Alasan keputusan" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #d1d5db;border-radius:8px"><div style="display:flex;gap:7px;margin-top:9px"><button class="btn danger" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Alpha')">Tetapkan Alpha (-20 XP)</button><button class="btn success" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Libur')">Izinkan (0 XP)</button></div></article>`).join(''):'<div class="card">Tidak ada catatan yang menunggu pemeriksaan.</div>'}`;
@@ -4645,6 +4653,7 @@ function renderSKTAttendanceV1(){
 }
 
 renderAbsenTab = async function(){
+  const navToken=window.__hrisNavSeq||0;
   const isHr=String(state.activeProfile?.role||'').toLowerCase()==='hr';
   if(isHr){_renderAbsenTabBeforeSKTV1();return;}
   const today=sktTodayKeyV1();
@@ -4653,6 +4662,7 @@ renderAbsenTab = async function(){
   const c=document.getElementById('content');
   if(c){c.classList.add('presensi-compact');c.innerHTML='<div class="card" style="text-align:center;padding:18px">Memeriksa jadwal presensi hari ini…</div>';}
   const res=await gasCall('getMySchedule',{});
+  if(navToken!==(window.__hrisNavSeq||0))return;
   if(!res?.ok || !res.schedule){
     // Jangan mengubah alur presensi reguler jika pemeriksaan awal jadwal gagal.
     // Backend tetap menjadi otoritas akhir saat presensi dikirim.
@@ -4723,10 +4733,12 @@ renderHRDashboard = function(){
 };
 
 async function renderHrisFullResetPageV1(){
+  const navToken=window.__hrisNavSeq||0;
   if (String(state.activeProfile?.role || '').toLowerCase() !== 'hr') { showToast('Akses khusus HR.'); return; }
   const c = document.getElementById('content');
   c.innerHTML = '<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
   const res = await gasCall('previewFullHrisReset', {});
+  if(navToken!==(window.__hrisNavSeq||0))return;
   if (!res?.ok) { c.innerHTML = '<div class="v4-section-head"><strong>Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="color:#b42318">' + resetHrisEscV1(res?.message || res?.error || 'Gagal memeriksa data.') + '</div>'; return; }
   const labels = {
     Attendance:'Riwayat presensi', AttendanceCorrections:'Pengajuan koreksi presensi',
@@ -4821,5 +4833,42 @@ async function confirmHrisFullResetV1(){
     c.innerHTML='<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Menu Reset</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
     renderHrisFullResetPageV1();
   };
+})();
+</script>
+
+
+<script id="hris-navigation-stability-v3">
+(function(){
+  // Satu penghitung untuk membedakan permintaan render yang masih aktif dari
+  // permintaan lama yang baru selesai setelah pengguna berpindah menu.
+  if(typeof window.__hrisNavSeq!=='number')window.__hrisNavSeq=0;
+  const previousSwitchTab=window.switchTab;
+  if(typeof previousSwitchTab==='function'){
+    window.switchTab=function(tab,pushState=true){
+      window.__hrisNavSeq++;
+      return previousSwitchTab.call(this,tab,pushState);
+    };
+  }
+
+  // Halaman khusus di dalam dashboard HR tidak selalu mengubah currentTab.
+  // Naikkan token saat halaman khusus tersebut dibuka agar hasil async lama
+  // tidak menimpa halaman yang lebih baru.
+  const bumpOnEntry=(name)=>{
+    const original=window[name];
+    if(typeof original!=='function'||original.__hrisNavGuarded)return;
+    const wrapped=function(){window.__hrisNavSeq++;return original.apply(this,arguments);};
+    wrapped.__hrisNavGuarded=true;
+    window[name]=wrapped;
+  };
+  ['renderHRResetMenuV2','renderHrisFullResetPageV2','renderAttendanceResetAdmin'].forEach(bumpOnEntry);
+
+  // popstate lama pernah didaftarkan lebih dari sekali pada versi sebelumnya.
+  // Tangani sekali di fase capture dan hentikan handler lama agar tidak terjadi
+  // dua kali render untuk satu tombol Back/Forward browser.
+  window.addEventListener('popstate',function(e){
+    e.stopImmediatePropagation();
+    const tab=e.state&&e.state.tab?e.state.tab:'home';
+    if(typeof window.switchTab==='function')window.switchTab(tab,false);
+  },true);
 })();
 </script>
