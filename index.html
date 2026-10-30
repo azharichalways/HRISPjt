@@ -4872,3 +4872,125 @@ async function confirmHrisFullResetV1(){
   },true);
 })();
 </script>
+
+<script id="hris-activity-dedupe-and-leader-agenda-v1">
+/* Perbaikan Absen Kegiatan Tambahan:
+   - Leader mendapat tab Kegiatan pada menu Agenda.
+   - Semua role non-HR memakai form dan endpoint yang sama.
+   - Pengiriman dikunci di browser; server menjadi sumber data dan duplikasi tidak ditambahkan ke cache.
+*/
+(function(){
+  const originalRenderAgendaTab = window.renderAgendaTab;
+  window.renderAgendaTab = function(){
+    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
+    if (role === 'leader' && !['team','agenda','kegiatan'].includes(state.agendaSubTab)) {
+      state.agendaSubTab = 'team';
+    }
+    const c = document.getElementById('content');
+    if (!c) return;
+
+    // Pertahankan tata letak menu Leader saat ini, tambahkan tab Kegiatan tanpa mengubah menu HR/Anggota.
+    if (role !== 'leader') return originalRenderAgendaTab.apply(this, arguments);
+
+    const tabs = `
+      <button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button>
+      <button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button>
+      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">✨ Absen Kegiatan Tambahan (+XP)</button>`;
+    c.innerHTML = `<div class="v4-section-head"><strong>Agenda</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;
+    renderAgendaSubTabContent();
+  };
+
+  // Kunci di level browser berlaku sebelum confirm/fetch, sehingga klik ganda tidak membuat request kedua.
+  window.__activitySubmissionBusy = false;
+  window.submitActivity = async function(){
+    if (window.__activitySubmissionBusy) return;
+    const select = document.getElementById('actType');
+    if (!select) return;
+    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
+    const type = select.value;
+    const typeLabel = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : type;
+    const note = (document.getElementById('actNote')?.value || '').trim() || 'Tanpa catatan';
+    const xp = vActXp(type);
+    const now = new Date();
+    const date = now.toISOString().slice(0,10);
+    const nik = String(state.activeProfile.nik);
+    const id = `act-${nik}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const btn = document.getElementById('btnSubmitAct');
+    const originalText = btn ? btn.textContent : '';
+
+    if (role !== 'hr') {
+      if (!GAS_URL) { showToast('Koneksi server diperlukan agar pengajuan tercatat dan dapat dikonfirmasi HR.'); return; }
+      const accepted = confirm('Kirim pilihan “'+typeLabel+'” ke HR untuk dikonfirmasi?\n\nJika diterima: +'+xp+' XP. Jika ditolak: -'+xp+' XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.');
+      if (!accepted) return;
+    }
+
+    window.__activitySubmissionBusy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Mengirim...'; }
+    try {
+      const res = await gasCall('addActivity', {id,type:typeLabel,note,date,xpRequested:xp});
+      if (!res || !res.ok) {
+        showToast('❌ Pengajuan kegiatan gagal dikirim: '+(res?.message || res?.error || 'Silakan coba lagi.'));
+        return;
+      }
+
+      if (role === 'hr') {
+        showToast(res.duplicate ? 'ℹ️ Kegiatan ini sudah tercatat.' : '✅ Kegiatan HR berhasil dicatat.');
+        renderAgendaTab();
+        return;
+      }
+
+      const item = res.activity || {};
+      const mapped = {
+        id:String(item.id || id), nik:String(item.nik || nik), nama:item.nama || state.activeProfile.nama || '',
+        role:item.role || role, type:item.type || typeLabel, note:item.note || note,
+        date:item.date || date, xpRequested:Number(item.xp_requested || xp), xpEarned:Number(item.xp_earned || 0),
+        status:item.status || 'Pending', reviewNote:item.review_note || '',
+        reviewedBy:item.reviewed_by || '', reviewedAt:item.reviewed_at || '', createdAt:item.created_at || ''
+      };
+      const ownKey = 'activities_' + nik;
+      const own = JSON.parse(localStorage.getItem(ownKey) || '[]');
+      if (!own.some(a => String(a.id) === String(mapped.id))) {
+        own.unshift(mapped);
+        localStorage.setItem(ownKey, JSON.stringify(own));
+      }
+      const all = JSON.parse(localStorage.getItem('activities_all') || '[]');
+      if (!all.some(a => String(a.id) === String(mapped.id))) {
+        all.unshift(mapped);
+        localStorage.setItem('activities_all', JSON.stringify(all));
+      }
+      showToast(res.duplicate ? 'ℹ️ Pengajuan serupa sudah terkirim. Tidak dibuat ulang.' : '📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');
+      renderAgendaTab();
+    } catch (err) {
+      showToast('❌ Terjadi kendala saat mengirim kegiatan: '+(err?.message || err));
+    } finally {
+      window.__activitySubmissionBusy = false;
+      const currentBtn = document.getElementById('btnSubmitAct');
+      if (currentBtn) { currentBtn.disabled = false; currentBtn.textContent = originalText || '📨 Kirim ke HR untuk Konfirmasi'; }
+    }
+  };
+})();
+</script>
+
+
+<script id="hris-activity-approval-queue-dedupe-v1">
+(function(){
+  const previousRender = window.renderAgendaSubTabContent;
+  window.renderAgendaSubTabContent = function(){
+    previousRender.apply(this, arguments);
+    if (String(state.activeProfile && state.activeProfile.role || '').toLowerCase() !== 'hr' || state.agendaSubTab !== 'kegiatan') return;
+    const host = document.getElementById('agendaSubTabContent');
+    if (!host) return;
+    const section = [...host.querySelectorAll('section')].find(el => (el.querySelector('h2')?.textContent || '').includes('Konfirmasi Kegiatan'));
+    if (!section) return;
+    const seen = new Set();
+    let uniqueCount = 0;
+    [...section.querySelectorAll('.card')].forEach(card => {
+      const key = (card.innerText || '').replace(/\s+/g, ' ').trim();
+      if (seen.has(key)) card.remove();
+      else { seen.add(key); uniqueCount++; }
+    });
+    const heading = section.querySelector('h2');
+    if (heading) heading.textContent = `📥 Konfirmasi Kegiatan Anggota & Leader (${uniqueCount})`;
+  };
+})();
+</script>
