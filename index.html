@@ -580,7 +580,9 @@ function mapBootstrapToCaches(bs) {
   }
   if (Array.isArray(bs.activities)) {
     const byNik = {};
-    const mappedActivities = bs.activities.map(a => ({ id:a.id, nik:idText_(a.nik), nama:a.nama||'', role:a.role||'', date:a.date, time:a.time||'', type:a.type, note:a.note, xpEarned:num_(a.xp_earned), xpRequested:num_(a.xp_requested), status:a.status||'Approved', reviewNote:a.review_note||'', reviewedBy:a.reviewed_by||'', reviewedAt:a.reviewed_at||'', createdAt:a.created_at||'' }));
+    const mappedActivitiesRaw = bs.activities.map(a => ({ id:String(a.id||''), nik:idText_(a.nik), nama:a.nama||'', role:a.role||'', date:a.date, time:a.time||'', type:a.type, note:a.note, xpEarned:num_(a.xp_earned), xpRequested:num_(a.xp_requested), status:a.status||'Approved', reviewNote:a.review_note||'', reviewedBy:a.reviewed_by||'', reviewedAt:a.reviewed_at||'', createdAt:a.created_at||'' }));
+    const activityIdsSeen = new Set();
+    const mappedActivities = mappedActivitiesRaw.filter(a => { if (!a.id || activityIdsSeen.has(a.id)) return false; activityIdsSeen.add(a.id); return true; });
     localStorage.setItem('activities_all', JSON.stringify(mappedActivities));
     mappedActivities.forEach(a => { const nik=String(a.nik); (byNik[nik]=byNik[nik]||[]).push(a); });
     Object.keys(byNik).forEach(nik => { byNik[nik].sort((a,b)=>String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id))); localStorage.setItem('activities_'+nik,JSON.stringify(byNik[nik])); });
@@ -1521,58 +1523,6 @@ function updateActXpButton() {
   else if (type === 'gathering') btn.textContent = '✨ Catat Kegiatan (+50 XP)';
   else if (type === 'diskusi_4mata' || type === 'diskusi_tim') btn.textContent = '✨ Catat Kegiatan (+40 XP)';
   else btn.textContent = '✨ Catat Kegiatan (+30 XP)';
-}
-
-async function submitActivity() {
-  const typeSelect = document.getElementById('actType');
-  const type = typeSelect.value;
-  const typeLabel = typeSelect.options[typeSelect.selectedIndex].text;
-  const note = document.getElementById('actNote').value.trim() || 'Tanpa catatan';
-
-  let xpMap = { pelatihan: 100, gathering: 50, diskusi_4mata: 40, diskusi_tim: 40, badminton: 30 };
-  let xp = xpMap[type] || 30;
-
-  state.activeProfile.xp = (state.activeProfile.xp || 0) + xp;
-  saveProfileChanges();
-
-  const now = new Date();
-  const act = {
-    id: Date.now(),
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
-    type: typeLabel,
-    note,
-    xpEarned: xp
-  };
-
-  state.activities.unshift(act);
-  localStorage.setItem('activities_' + state.activeProfile.nik, JSON.stringify(state.activities));
-
-  if (GAS_URL) gasCall('addActivity', { ...act, nik: state.activeProfile.nik });
-
-  fireConfetti();
-  showToast(`🎉 Kegiatan dicatat! +${xp} XP ditambahkan.`);
-  renderAgendaTab();
-}
-
-function renderActivityHistory() {
-  const list = document.getElementById('actHistoryList');
-  if (!list) return;
-  if (!state.activities.length) {
-    list.innerHTML = '<div class="empty">Belum ada kegiatan tambahan yang dicatat.</div>';
-    return;
-  }
-  list.innerHTML = state.activities.map(a => `
-    <div class="hist-row">
-      <div class="l">
-        <div class="d">${a.type}</div>
-        <div class="s">${a.note}</div>
-      </div>
-      <div class="r">
-        <div class="s mono">${a.date}</div>
-      </div>
-    </div>
-  `).join('');
 }
 
 function renderAgendaList() {
@@ -4213,30 +4163,6 @@ renderAgendaTab = async function(){
   }
   return _renderAgendaTab_v14();
 };
-/* Make the activity approval panel independent of older wrapper order. */
-const _renderAgendaSubTabContent_v14 = renderAgendaSubTabContent;
-renderAgendaSubTabContent = function(){
-  _renderAgendaSubTabContent_v14();
-  const role=String(state.activeProfile?.role||'').toLowerCase();
-  if(role!=='hr' || state.agendaSubTab!=='kegiatan') return;
-  const c=document.getElementById('agendaSubTabContent'); if(!c) return;
-  c.querySelectorAll('.activity-approval-panel-v14').forEach(x=>x.remove());
-  let all=[]; try{all=JSON.parse(localStorage.getItem('activities_all')||'[]')}catch(_){}
-  const pending=all.filter(a=>String(a.status||'Pending').toLowerCase()==='pending')
-    .sort((a,b)=>String(b.createdAt||b.date||b.id||'').localeCompare(String(a.createdAt||a.date||a.id||'')));
-  const wrap=document.createElement('section'); wrap.className='activity-approval-panel-v14';
-  wrap.innerHTML=`<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota &amp; Leader (${pending.length})</h2>
-  <div class="form-hint" style="margin-bottom:8px">Tinjau pengajuan dari Anggota maupun Leader. Diterima: +XP sesuai jenis kegiatan; ditolak: -XP dengan nilai yang sama. Pengajuan yang dibatalkan tidak dapat diproses.</div>
-  ${pending.length?pending.map(a=>`<div class="card" style="padding:10px;margin:7px 0">
-    <div style="font-weight:800;font-size:12px">${vActEsc(a.nama||a.nik||'Pengguna')} — ${vActEsc(a.type||'Kegiatan')}</div>
-    <div class="muted" style="font-size:10px;margin-top:4px">${vActEsc(a.role||'')} • ${vActEsc(a.date||'')} • Potensi XP ${Number(a.xpRequested||a.xp_requested||vActXp(a.type))}</div>
-    <div style="font-size:11px;margin-top:6px">${vActEsc(a.note||'Tanpa catatan')}</div>
-    <div style="display:flex;gap:6px;margin-top:9px">
-      <button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','approve')">✅ Terima (+${Number(a.xpRequested||a.xp_requested||vActXp(a.type))} XP)</button>
-      <button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','reject')">❌ Tolak (-${Number(a.xpRequested||a.xp_requested||vActXp(a.type))} XP)</button>
-    </div></div>`).join(''):'<div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div>'}`;
-  c.prepend(wrap);
-};
 /* Explicit read acknowledgment: recipient confirms a private message was read. */
 async function acknowledgeHRMessageV14(id){
   if(!GAS_URL){showToast('Koneksi server diperlukan untuk mengonfirmasi pesan.');return;}
@@ -4562,40 +4488,27 @@ renderHRMonthlyReportsPage=function(){_renderHRMonthlyReportsPage_downloadV1();c
 </script>
 
 
-<script id="activity-hr-approval-v1">
+<script id="activity-hr-approval-helpers-v2">
 function vActStatus(a){return String(a.status||'Approved').toLowerCase();}
 function vActLabel(a){const s=vActStatus(a);return s==='pending'?'⏳ Menunggu HR':s==='approved'?'✅ Diterima':s==='rejected'?'❌ Ditolak':s==='cancelled'?'↩️ Dibatalkan':a.status||'Tercatat';}
 function vActXp(type){const t=String(type||'').toLowerCase();if(t.includes('pelatihan'))return 100;if(t.includes('gathering'))return 50;if(t.includes('diskusi'))return 40;if(t.includes('badminton')||t.includes('olahraga'))return 30;return 30;}
 function vActEsc(x){return typeof v9Esc==='function'?v9Esc(String(x??'')):String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-async function submitActivity(){
- const select=document.getElementById('actType');if(!select)return;const role=String(state.activeProfile?.role||'').toLowerCase(),type=select.value,typeLabel=select.options[select.selectedIndex]?.text||type,note=document.getElementById('actNote')?.value.trim()||'Tanpa catatan',xp=vActXp(type),id=String(Date.now()),now=new Date();
- if(role==='hr'){
-   const res=await gasCall('addActivity',{id,type:typeLabel,note,date:now.toISOString().slice(0,10),xpRequested:xp});
-   if(!res?.ok){showToast('❌ Kegiatan gagal dicatat: '+(res?.message||res?.error||'coba lagi'));return;}
-   state.activeProfile={...state.activeProfile,...(res.user||{})};showToast('✅ Kegiatan HR dicatat. XP +'+xp);renderAgendaTab();return;
- }
- if(!GAS_URL){showToast('Koneksi server diperlukan agar pengajuan tercatat dan dapat dikonfirmasi HR.');return;}
- if(!confirm('Kirim pilihan “'+typeLabel+'” ke HR untuk dikonfirmasi?\n\nJika diterima: +'+xp+' XP. Jika ditolak: -'+xp+' XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.'))return;
- const btn=document.getElementById('btnSubmitAct');if(btn){btn.disabled=true;btn.textContent='⏳ Mengirim ke HR...';}
- const res=await gasCall('addActivity',{id,type:typeLabel,note,date:now.toISOString().slice(0,10),xpRequested:xp});
- if(btn){btn.disabled=false;btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}
- if(!res?.ok){showToast('❌ Pengajuan gagal dikirim: '+(res?.message||res?.error||'coba lagi'));return;}
- const arr=JSON.parse(localStorage.getItem('activities_'+state.activeProfile.nik)||'[]');arr.unshift({...res.activity,status:'Pending',xpRequested:xp,xpEarned:0});localStorage.setItem('activities_'+state.activeProfile.nik,JSON.stringify(arr));
- const all=JSON.parse(localStorage.getItem('activities_all')||'[]');all.unshift({...res.activity,status:'Pending',xpRequested:xp,xpEarned:0});localStorage.setItem('activities_all',JSON.stringify(all));
- showToast('📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');renderAgendaTab();
-}
 function renderActivityHistory(){
- const list=document.getElementById('actHistoryList');if(!list)return;const acts=JSON.parse(localStorage.getItem('activities_'+state.activeProfile.nik)||'[]');state.activities=acts;
+ const list=document.getElementById('actHistoryList');if(!list)return;
+ const acts=JSON.parse(localStorage.getItem('activities_'+state.activeProfile.nik)||'[]');state.activities=acts;
  if(!acts.length){list.innerHTML='<div class="empty">Belum ada kegiatan tambahan yang dicatat.</div>';return;}
  list.innerHTML=acts.map(a=>{const status=vActStatus(a),pending=status==='pending';return `<div class="hist-row" style="align-items:flex-start;gap:8px"><div class="l" style="min-width:0"><div class="d">${vActEsc(a.type)}</div><div class="s">${vActEsc(a.note||'Tanpa catatan')} • ${vActEsc(a.date||'')}</div><div class="s" style="margin-top:4px;font-weight:700">${vActLabel(a)}${pending?' • Potensi XP '+Number(a.xpRequested||vActXp(a.type)):status==='approved'?' • XP '+(Number(a.xpEarned)>0?'+'+a.xpEarned:a.xpEarned||0):status==='rejected'?' • XP '+(Number(a.xpEarned)||0):''}</div>${a.reviewNote?`<div class="s">Catatan HR: ${vActEsc(a.reviewNote)}</div>`:''}</div><div class="r" style="flex-shrink:0">${pending?`<button class="btn secondary" style="padding:6px 8px;font-size:10px" onclick="cancelMyActivityV1('${String(a.id).replace(/'/g,'')}')">Batalkan</button>`:''}</div></div>`;}).join('');
 }
-async function cancelMyActivityV1(id){if(!confirm('Batalkan pengajuan kegiatan ini sebelum diproses HR?'))return;const res=await gasCall('cancelActivity',{id});if(!res?.ok){showToast('❌ Tidak dapat membatalkan: '+(res?.message||res?.error||''));return;}const nik=String(state.activeProfile.nik),arr=JSON.parse(localStorage.getItem('activities_'+nik)||'[]').map(a=>String(a.id)===String(id)?{...a,status:'Cancelled',reviewNote:'Dibatalkan oleh Anda'}:a);localStorage.setItem('activities_'+nik,JSON.stringify(arr));localStorage.setItem('activities_all',JSON.stringify(JSON.parse(localStorage.getItem('activities_all')||'[]').map(a=>String(a.id)===String(id)?{...a,status:'Cancelled'}:a)));showToast('↩️ Pengajuan kegiatan dibatalkan.');renderAgendaTab();}
-async function decideActivityHRV1(id,decision){const note=prompt(decision==='approve'?'Catatan HR (opsional):':'Alasan penolakan (disarankan):','')||'';if(decision==='reject'&&!confirm('Tolak pengajuan ini? XP anggota akan dikurangi sesuai nilai kegiatan.'))return;const res=await gasCall('reviewActivity',{id,decision,note});if(!res?.ok){showToast('❌ Keputusan gagal disimpan: '+(res?.message||res?.error||''));return;}const all=JSON.parse(localStorage.getItem('activities_all')||'[]').map(a=>String(a.id)===String(id)?{...a,status:res.status,xpEarned:res.xpDelta,reviewNote:note,reviewedBy:state.activeProfile.nik}:a);localStorage.setItem('activities_all',JSON.stringify(all));showToast(res.status==='Approved'?'✅ Diterima. XP anggota +'+res.xpDelta:'❌ Ditolak. XP anggota '+res.xpDelta);renderAgendaTab();}
-const _renderAgendaSubTabContent_activityApprovalV1=renderAgendaSubTabContent;
-renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityApprovalV1();if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'||state.agendaSubTab!=='kegiatan')return;const c=document.getElementById('agendaSubTabContent');if(!c)return;const all=JSON.parse(localStorage.getItem('activities_all')||'[]'),pending=all.filter(a=>vActStatus(a)==='pending').sort((a,b)=>String(b.createdAt||b.date||'').localeCompare(String(a.createdAt||a.date||'')));const wrap=document.createElement('section');wrap.innerHTML=`<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota & Leader (${pending.length})</h2><div class="form-hint" style="margin-bottom:8px">Terima memberi XP sesuai jenis kegiatan. Tolak mengurangi XP dengan nilai yang sama. Anggota/Leader dapat membatalkan selama status masih menunggu.</div>${pending.length?pending.map(a=>`<div class="card" style="padding:10px;margin:7px 0"><div style="font-weight:800;font-size:12px">${vActEsc(a.nama||a.nik)} — ${vActEsc(a.type)}</div><div class="muted" style="font-size:10px;margin-top:4px">${vActEsc(a.role||'')} • ${vActEsc(a.date||'')} • Potensi XP ${Number(a.xpRequested||vActXp(a.type))}</div><div style="font-size:11px;margin-top:6px">${vActEsc(a.note||'Tanpa catatan')}</div><div style="display:flex;gap:6px;margin-top:9px"><button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','approve')">✅ Terima (+${Number(a.xpRequested||vActXp(a.type))} XP)</button><button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${String(a.id).replace(/'/g,'')}','reject')">❌ Tolak (-${Number(a.xpRequested||vActXp(a.type))} XP)</button></div></div>`).join(''):'<div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div>'}`;c.prepend(wrap);};
-// Update text and instructions in the existing activity form without changing other agenda views.
-const _renderAgendaSubTabContent_activityFormV1=renderAgendaSubTabContent;
-renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityFormV1();if(state.agendaSubTab!=='kegiatan')return;const role=String(state.activeProfile?.role||'').toLowerCase(),c=document.getElementById('agendaSubTabContent');if(!c)return;const btn=document.getElementById('btnSubmitAct');if(role!=='hr'&&btn){btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}const card=c.querySelector('.card');if(card&&role!=='hr'&&!card.querySelector('.activity-approval-info')){const info=document.createElement('div');info.className='activity-approval-info';info.style.cssText='font-size:10.5px;line-height:1.5;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px;border-radius:8px;margin:8px 0';info.innerHTML='ℹ️ Sebelum dikirim, Anda bisa mengubah pilihan jenis kegiatan atau membatalkan pilihan. Setelah dikirim, status menunggu konfirmasi HR dan pengajuan masih dapat dibatalkan sebelum HR memutuskan. <strong>Diterima: +XP sesuai jenis kegiatan. Ditolak: -XP dengan nilai yang sama.</strong>';const sel=document.getElementById('actType');if(sel)sel.parentNode.insertBefore(info,sel.nextSibling);}};
+async function cancelMyActivityV1(id){
+ if(!confirm('Batalkan pengajuan kegiatan ini sebelum diproses HR?'))return;
+ const res=await gasCall('cancelActivity',{id});
+ if(!res?.ok){showToast('❌ Tidak dapat membatalkan: '+(res?.message||res?.error||''));return;}
+ const nik=String(state.activeProfile.nik);
+ const update=a=>String(a.id)===String(id)?{...a,status:'Cancelled',reviewNote:'Dibatalkan oleh Anda'}:a;
+ localStorage.setItem('activities_'+nik,JSON.stringify(JSON.parse(localStorage.getItem('activities_'+nik)||'[]').map(update)));
+ localStorage.setItem('activities_all',JSON.stringify(JSON.parse(localStorage.getItem('activities_all')||'[]').map(update)));
+ showToast('↩️ Pengajuan kegiatan dibatalkan.');renderAgendaTab();
+}
 </script>
 
 <script id="nightAttendanceReviewV1">
@@ -4873,124 +4786,196 @@ async function confirmHrisFullResetV1(){
 })();
 </script>
 
-<script id="hris-activity-dedupe-and-leader-agenda-v1">
-/* Perbaikan Absen Kegiatan Tambahan:
-   - Leader mendapat tab Kegiatan pada menu Agenda.
-   - Semua role non-HR memakai form dan endpoint yang sama.
-   - Pengiriman dikunci di browser; server menjadi sumber data dan duplikasi tidak ditambahkan ke cache.
-*/
+<script id="hris-activity-single-source-v3">
 (function(){
-  const originalRenderAgendaTab = window.renderAgendaTab;
+  'use strict';
+
+  const norm = value => String(value == null ? '' : value).normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  const esc = value => (typeof vActEsc === 'function' ? vActEsc(String(value == null ? '' : value)) : String(value == null ? '' : value).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])));
+  const todayJakarta = () => {
+    const p = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Jakarta', year:'numeric', month:'2-digit', day:'2-digit'}).formatToParts(new Date());
+    const x = {}; p.forEach(v => { if (v.type !== 'literal') x[v.type] = v.value; });
+    return `${x.year}-${x.month}-${x.day}`;
+  };
+  const mapActivity = (a, fallback={}) => ({
+    id:String(a.id || fallback.id || ''), nik:String(a.nik || fallback.nik || ''),
+    nama:a.nama || fallback.nama || '', role:a.role || fallback.role || '',
+    type:a.type || fallback.type || '', note:a.note || fallback.note || '',
+    date:a.date || fallback.date || '', time:a.time || '',
+    xpRequested:Number(a.xp_requested ?? a.xpRequested ?? fallback.xpRequested ?? 0),
+    xpEarned:Number(a.xp_earned ?? a.xpEarned ?? 0), status:a.status || 'Pending',
+    reviewNote:a.review_note || a.reviewNote || '', reviewedBy:a.reviewed_by || a.reviewedBy || '',
+    reviewedAt:a.reviewed_at || a.reviewedAt || '', createdAt:a.created_at || a.createdAt || ''
+  });
+  const readArray = key => { try { const v=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(v)?v:[]; } catch(_){ return []; } };
+  const writeArray = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+  // Leader uses the same Kegiatan form and endpoint as Anggota; only its Agenda tabs differ.
+  const priorRenderAgendaTab = window.renderAgendaTab;
   window.renderAgendaTab = function(){
-    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
-    if (role === 'leader' && !['team','agenda','kegiatan'].includes(state.agendaSubTab)) {
-      state.agendaSubTab = 'team';
-    }
+    const role = norm(state.activeProfile && state.activeProfile.role);
+    if (role !== 'leader') return priorRenderAgendaTab.apply(this, arguments);
+    if (!['team','agenda','kegiatan'].includes(state.agendaSubTab)) state.agendaSubTab = 'team';
     const c = document.getElementById('content');
     if (!c) return;
-
-    // Pertahankan tata letak menu Leader saat ini, tambahkan tab Kegiatan tanpa mengubah menu HR/Anggota.
-    if (role !== 'leader') return originalRenderAgendaTab.apply(this, arguments);
-
     const tabs = `
       <button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button>
       <button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button>
       <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">✨ Absen Kegiatan Tambahan (+XP)</button>`;
     c.innerHTML = `<div class="v4-section-head"><strong>Agenda</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;
-    renderAgendaSubTabContent();
+    window.renderAgendaSubTabContent();
   };
 
-  // Kunci di level browser berlaku sebelum confirm/fetch, sehingga klik ganda tidak membuat request kedua.
+  // One renderer only: call the existing agenda renderer once, then add either the form note
+  // or one HR approval queue. Old/duplicate panels are removed defensively.
+  const priorRenderAgendaSubTabContent = window.renderAgendaSubTabContent;
+  window.renderAgendaSubTabContent = function(){
+    priorRenderAgendaSubTabContent.apply(this, arguments);
+    if (state.agendaSubTab !== 'kegiatan') return;
+    const role = norm(state.activeProfile && state.activeProfile.role);
+    const host = document.getElementById('agendaSubTabContent');
+    if (!host) return;
+
+    host.querySelectorAll('.activity-approval-panel-canonical, .activity-approval-panel-v14').forEach(el => el.remove());
+    [...host.querySelectorAll('section')].forEach(section => {
+      const heading = section.querySelector('h2');
+      if (heading && /Konfirmasi Kegiatan Anggota/i.test(heading.textContent || '')) section.remove();
+    });
+
+    if (role !== 'hr') {
+      const button = document.getElementById('btnSubmitAct');
+      if (button) button.textContent = '📨 Kirim ke HR untuk Konfirmasi';
+      const card = host.querySelector('.card');
+      if (card && !card.querySelector('.activity-approval-info')) {
+        const info = document.createElement('div');
+        info.className = 'activity-approval-info';
+        info.style.cssText = 'font-size:10.5px;line-height:1.5;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px;border-radius:8px;margin:8px 0';
+        info.innerHTML = 'ℹ️ Pilih jenis kegiatan dan isi catatan bila diperlukan. Setelah dikirim, pengajuan menunggu konfirmasi HR dan dapat dibatalkan sebelum diputuskan. <strong>Diterima: +XP sesuai jenis kegiatan. Ditolak: -XP dengan nilai yang sama.</strong>';
+        const select = document.getElementById('actType');
+        if (select && select.parentNode) select.parentNode.insertBefore(info, select.nextSibling);
+      }
+      return;
+    }
+
+    const all = readArray('activities_all');
+    const pending = all.filter(a => norm(a.status || 'Pending') === 'pending');
+    const keyOf = a => [norm(a.nik), norm(a.date), norm(a.type), norm(a.note || 'Tanpa catatan')].join('|');
+    const orderedPending = pending.slice().sort((a,b) => String(a.createdAt || a.created_at || a.id || '').localeCompare(String(b.createdAt || b.created_at || b.id || '')));
+    const unique = [];
+    orderedPending.forEach(a => {
+      const key = keyOf(a);
+      const created = Date.parse(String(a.createdAt || a.created_at || ''));
+      const duplicate = unique.some(existing => {
+        if (keyOf(existing) !== key) return false;
+        const existingCreated = Date.parse(String(existing.createdAt || existing.created_at || ''));
+        return Number.isFinite(created) && Number.isFinite(existingCreated) && Math.abs(created - existingCreated) <= 60 * 1000;
+      });
+      if (!duplicate) unique.push(a);
+    });
+    unique.sort((a,b) => String(b.createdAt || b.created_at || b.date || b.id || '').localeCompare(String(a.createdAt || a.created_at || a.date || a.id || '')));
+    const wrap = document.createElement('section');
+    wrap.className = 'activity-approval-panel-canonical';
+    wrap.innerHTML = `<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota &amp; Leader (${unique.length})</h2>
+      <div class="form-hint" style="margin-bottom:8px">Satu kegiatan ditampilkan satu kali. Terima memberi XP sesuai jenis kegiatan; Tolak mengurangi XP dengan nilai yang sama. Pengajuan yang dibatalkan tidak dapat diproses.</div>
+      ${unique.length ? unique.map(a => {
+        const id = String(a.id || '');
+        const xp = Number(a.xpRequested || a.xp_requested || (typeof vActXp === 'function' ? vActXp(a.type) : 30));
+        return `<div class="card" style="padding:10px;margin:7px 0">
+          <div style="font-weight:800;font-size:12px">${esc(a.nama || a.nik || 'Pengguna')} — ${esc(a.type || 'Kegiatan')}</div>
+          <div class="muted" style="font-size:10px;margin-top:4px">${esc(a.role || '')} • ${esc(a.date || '')} • Potensi XP ${xp}</div>
+          <div style="font-size:11px;margin-top:6px">${esc(a.note || 'Tanpa catatan')}</div>
+          <div style="display:flex;gap:6px;margin-top:9px">
+            <button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${esc(id)}','approve')">✅ Terima (+${xp} XP)</button>
+            <button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${esc(id)}','reject')">❌ Tolak (-${xp} XP)</button>
+          </div></div>`;
+      }).join('') : '<div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div>'}`;
+    host.appendChild(wrap);
+  };
+
+  // One in-flight submit per tab. The request ID is retained after a network timeout,
+  // so a retry reuses the same idempotency key instead of creating another row.
   window.__activitySubmissionBusy = false;
   window.submitActivity = async function(){
     if (window.__activitySubmissionBusy) return;
     const select = document.getElementById('actType');
-    if (!select) return;
-    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
+    if (!select || !state.activeProfile) return;
+    const role = norm(state.activeProfile.role);
     const type = select.value;
-    const typeLabel = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : type;
+    const typeLabel = select.options[select.selectedIndex]?.text || type;
     const note = (document.getElementById('actNote')?.value || '').trim() || 'Tanpa catatan';
-    const xp = vActXp(type);
-    const now = new Date();
-    const date = now.toISOString().slice(0,10);
+    const xpLabel = typeLabel.match(/\+(\d+)\s*XP/i);
+    const xp = xpLabel ? Number(xpLabel[1]) : (typeof vActXp === 'function' ? vActXp(type) : 30);
+    const date = todayJakarta();
     const nik = String(state.activeProfile.nik);
-    const id = `act-${nik}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-    const btn = document.getElementById('btnSubmitAct');
-    const originalText = btn ? btn.textContent : '';
+    const storageKey = 'hris_activity_pending_request_' + nik;
+    const fingerprint = JSON.stringify([typeLabel, note, date, xp]);
+    let request = null;
+    try { request = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); } catch(_) {}
+    if (!request || request.fingerprint !== fingerprint || !request.id) {
+      request = {fingerprint, id:`act-${nik}-${Date.now()}-${Math.random().toString(36).slice(2,10)}`};
+      sessionStorage.setItem(storageKey, JSON.stringify(request));
+    }
 
     if (role !== 'hr') {
       if (!GAS_URL) { showToast('Koneksi server diperlukan agar pengajuan tercatat dan dapat dikonfirmasi HR.'); return; }
-      const accepted = confirm('Kirim pilihan “'+typeLabel+'” ke HR untuk dikonfirmasi?\n\nJika diterima: +'+xp+' XP. Jika ditolak: -'+xp+' XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.');
-      if (!accepted) return;
+      if (!confirm(`Kirim pilihan “${typeLabel}” ke HR untuk dikonfirmasi?\n\nJika diterima: +${xp} XP. Jika ditolak: -${xp} XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.`)) return;
     }
 
+    const button = document.getElementById('btnSubmitAct');
+    const oldText = button?.textContent || '';
     window.__activitySubmissionBusy = true;
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Mengirim...'; }
+    if (button) { button.disabled = true; button.textContent = '⏳ Mengirim...'; }
     try {
-      const res = await gasCall('addActivity', {id,type:typeLabel,note,date,xpRequested:xp});
+      const res = await gasCall('addActivity', {id:request.id, type:typeLabel, note, date, xpRequested:xp});
       if (!res || !res.ok) {
-        showToast('❌ Pengajuan kegiatan gagal dikirim: '+(res?.message || res?.error || 'Silakan coba lagi.'));
-        return;
+        showToast('❌ Pengajuan kegiatan gagal dikirim: ' + (res?.message || res?.error || 'Silakan coba lagi.'));
+        return; // Keep the same request ID for a safe retry.
       }
-
-      if (role === 'hr') {
-        showToast(res.duplicate ? 'ℹ️ Kegiatan ini sudah tercatat.' : '✅ Kegiatan HR berhasil dicatat.');
-        renderAgendaTab();
-        return;
-      }
-
-      const item = res.activity || {};
-      const mapped = {
-        id:String(item.id || id), nik:String(item.nik || nik), nama:item.nama || state.activeProfile.nama || '',
-        role:item.role || role, type:item.type || typeLabel, note:item.note || note,
-        date:item.date || date, xpRequested:Number(item.xp_requested || xp), xpEarned:Number(item.xp_earned || 0),
-        status:item.status || 'Pending', reviewNote:item.review_note || '',
-        reviewedBy:item.reviewed_by || '', reviewedAt:item.reviewed_at || '', createdAt:item.created_at || ''
-      };
+      sessionStorage.removeItem(storageKey);
+      const item = mapActivity(res.activity || {}, {id:request.id, nik, nama:state.activeProfile.nama, role, type:typeLabel, note, date, xpRequested:xp});
       const ownKey = 'activities_' + nik;
-      const own = JSON.parse(localStorage.getItem(ownKey) || '[]');
-      if (!own.some(a => String(a.id) === String(mapped.id))) {
-        own.unshift(mapped);
-        localStorage.setItem(ownKey, JSON.stringify(own));
+      const own = readArray(ownKey).filter(a => String(a.id) !== String(item.id));
+      own.unshift(item); writeArray(ownKey, own);
+      const all = readArray('activities_all').filter(a => String(a.id) !== String(item.id));
+      all.unshift(item); writeArray('activities_all', all);
+      state.activities = own;
+      if (role === 'hr') {
+        if (res.user) state.activeProfile = {...state.activeProfile, ...res.user};
+        showToast(res.duplicate ? 'ℹ️ Kegiatan ini sudah tercatat.' : `✅ Kegiatan HR dicatat. XP +${xp}`);
+      } else {
+        showToast(res.duplicate ? 'ℹ️ Pengajuan ini sudah tercatat. Tidak dibuat ulang.' : '📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');
       }
-      const all = JSON.parse(localStorage.getItem('activities_all') || '[]');
-      if (!all.some(a => String(a.id) === String(mapped.id))) {
-        all.unshift(mapped);
-        localStorage.setItem('activities_all', JSON.stringify(all));
-      }
-      showToast(res.duplicate ? 'ℹ️ Pengajuan serupa sudah terkirim. Tidak dibuat ulang.' : '📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');
-      renderAgendaTab();
+      window.renderAgendaTab();
     } catch (err) {
-      showToast('❌ Terjadi kendala saat mengirim kegiatan: '+(err?.message || err));
+      showToast('❌ Terjadi kendala saat mengirim kegiatan: ' + (err?.message || err));
     } finally {
       window.__activitySubmissionBusy = false;
-      const currentBtn = document.getElementById('btnSubmitAct');
-      if (currentBtn) { currentBtn.disabled = false; currentBtn.textContent = originalText || '📨 Kirim ke HR untuk Konfirmasi'; }
+      const current = document.getElementById('btnSubmitAct');
+      if (current) { current.disabled = false; current.textContent = oldText || (role === 'hr' ? '✨ Catat Kegiatan' : '📨 Kirim ke HR untuk Konfirmasi'); }
     }
   };
-})();
-</script>
 
-
-<script id="hris-activity-approval-queue-dedupe-v1">
-(function(){
-  const previousRender = window.renderAgendaSubTabContent;
-  window.renderAgendaSubTabContent = function(){
-    previousRender.apply(this, arguments);
-    if (String(state.activeProfile && state.activeProfile.role || '').toLowerCase() !== 'hr' || state.agendaSubTab !== 'kegiatan') return;
-    const host = document.getElementById('agendaSubTabContent');
-    if (!host) return;
-    const section = [...host.querySelectorAll('section')].find(el => (el.querySelector('h2')?.textContent || '').includes('Konfirmasi Kegiatan'));
-    if (!section) return;
-    const seen = new Set();
-    let uniqueCount = 0;
-    [...section.querySelectorAll('.card')].forEach(card => {
-      const key = (card.innerText || '').replace(/\s+/g, ' ').trim();
-      if (seen.has(key)) card.remove();
-      else { seen.add(key); uniqueCount++; }
-    });
-    const heading = section.querySelector('h2');
-    if (heading) heading.textContent = `📥 Konfirmasi Kegiatan Anggota & Leader (${uniqueCount})`;
+  // Prevent two HR decisions on the same card while a request is in flight.
+  window.__activityReviewBusy = window.__activityReviewBusy || new Set();
+  window.decideActivityHRV1 = async function(id, decision){
+    id = String(id || '');
+    if (!id || window.__activityReviewBusy.has(id)) return;
+    const note = prompt(decision === 'approve' ? 'Catatan HR (opsional):' : 'Alasan penolakan (disarankan):', '') || '';
+    if (decision === 'reject' && !confirm('Tolak pengajuan ini? XP anggota akan dikurangi sesuai nilai kegiatan.')) return;
+    window.__activityReviewBusy.add(id);
+    try {
+      const res = await gasCall('reviewActivity', {id, decision, note});
+      if (!res?.ok) { showToast('❌ Keputusan gagal disimpan: ' + (res?.message || res?.error || 'Silakan muat ulang.')); return; }
+      const closed = new Set([id, ...(res.duplicateIds || [])].map(String));
+      const all = readArray('activities_all').map(a => closed.has(String(a.id)) ? {...a, status:String(a.id)===id ? res.status : 'Cancelled', xpEarned:String(a.id)===id ? res.xpDelta : 0, reviewNote:String(a.id)===id ? note : 'Duplikat pengajuan; tidak diproses dan tidak memengaruhi XP.'} : a);
+      writeArray('activities_all', all);
+      showToast(res.status === 'Approved' ? `✅ Diterima. XP anggota +${res.xpDelta}` : `❌ Ditolak. XP anggota ${res.xpDelta}`);
+      await window.renderAgendaTab();
+    } catch(err) {
+      showToast('❌ Keputusan gagal: ' + (err?.message || err));
+    } finally {
+      window.__activityReviewBusy.delete(id);
+    }
   };
 })();
 </script>
