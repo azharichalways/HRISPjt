@@ -4581,3 +4581,109 @@ renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityApproval
 const _renderAgendaSubTabContent_activityFormV1=renderAgendaSubTabContent;
 renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityFormV1();if(state.agendaSubTab!=='kegiatan')return;const role=String(state.activeProfile?.role||'').toLowerCase(),c=document.getElementById('agendaSubTabContent');if(!c)return;const btn=document.getElementById('btnSubmitAct');if(role!=='hr'&&btn){btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}const card=c.querySelector('.card');if(card&&role!=='hr'&&!card.querySelector('.activity-approval-info')){const info=document.createElement('div');info.className='activity-approval-info';info.style.cssText='font-size:10.5px;line-height:1.5;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px;border-radius:8px;margin:8px 0';info.innerHTML='ℹ️ Sebelum dikirim, Anda bisa mengubah pilihan jenis kegiatan atau membatalkan pilihan. Setelah dikirim, status menunggu konfirmasi HR dan pengajuan masih dapat dibatalkan sebelum HR memutuskan. <strong>Diterima: +XP sesuai jenis kegiatan. Ditolak: -XP dengan nilai yang sama.</strong>';const sel=document.getElementById('actType');if(sel)sel.parentNode.insertBefore(info,sel.nextSibling);}};
 </script>
+
+<script id="nightAttendanceReviewV1">
+// HR-only queue: shift malam yang tidak absen dan kegagalan baca jadwal tidak otomatis menjadi Alpha.
+async function renderNightAttendanceReviewsV1(){
+ const c=document.getElementById('content');if(!c)return;
+ c.innerHTML='<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">Memuat catatan yang memerlukan keputusan HR…</div></div>';
+ const res=await gasCall('getPendingAttendanceReviews',{});
+ if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat pemeriksaan: ${v101Esc(res?.message||res?.error||'Kesalahan koneksi')}<button class="btn secondary" onclick="renderHRDashboard()">Kembali</button></div>`;return;}
+ const rows=res.records||[];
+ c.innerHTML=`<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">${rows.length} catatan menunggu keputusan. Tidak ada potongan XP sebelum HR memutuskan.</div></div><div class="att-actions"><button class="btn secondary" onclick="renderHRDashboard()">← Kembali</button></div>${rows.length?rows.map(r=>`<article class="card" style="margin:10px 0;padding:12px"><strong>${v101Esc(r.nama||r.nik)} • ${v101Esc(r.date||'')}</strong><div class="muted" style="font-size:11px;margin-top:5px">NIK ${v101Esc(r.nik||'—')} · Shift ${v101Esc(r.shift||'—')} · Status ${v101Esc(r.status_text||'—')}</div><div style="font-size:11px;line-height:1.5;margin-top:7px;overflow-wrap:anywhere">${v101Esc(String(r.source||'Menunggu pemeriksaan').replace(/^scheduleReadFailedMaintenance:/,'Gagal membaca jadwal: '))}</div><label style="display:block;margin-top:8px;font-size:11px">Catatan HR (opsional)</label><input id="nightReviewNote_${v101Esc(r.id)}" placeholder="Alasan keputusan" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #d1d5db;border-radius:8px"><div style="display:flex;gap:7px;margin-top:9px"><button class="btn danger" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Alpha')">Tetapkan Alpha (-20 XP)</button><button class="btn success" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Libur')">Izinkan (0 XP)</button></div></article>`).join(''):'<div class="card">Tidak ada catatan yang menunggu pemeriksaan.</div>'}`;
+}
+async function resolveNightAttendanceReviewV1(id,decision){
+ const label=decision==='Alpha'?'menetapkan Alpha dan mengurangi 20 XP':'mengizinkan ketidakhadiran tanpa penalti';
+ if(!confirm('Konfirmasi HR: '+label+'?'))return;
+ const note=document.getElementById('nightReviewNote_'+id)?.value||'';
+ const res=await gasCall('resolveAttendanceReview',{id,decision,note});
+ if(!res?.ok){showToast('❌ Keputusan gagal: '+(res?.message||res?.error||'coba lagi'));return;}
+ showToast('✅ '+(res.message||'Keputusan disimpan.'));
+ await renderNightAttendanceReviewsV1();
+}
+const _nightReviewOldHRDashboardV1=renderHRDashboard;
+renderHRDashboard=function(){_nightReviewOldHRDashboardV1();const c=document.getElementById('content');if(!c)return;const grid=c.querySelector('.home-grid');if(!grid||grid.querySelector('[data-night-review-v1]'))return;const pendingBtn=document.createElement('button');pendingBtn.className='home-tile';pendingBtn.dataset.nightReviewV1='1';pendingBtn.innerHTML='<div class="icon">🕘</div><div class="title">Pemeriksaan Absensi</div><div class="desc">Tinjau shift malam atau jadwal yang belum dapat dipastikan.</div>';pendingBtn.onclick=renderNightAttendanceReviewsV1;grid.appendChild(pendingBtn);};
+</script>
+
+
+<script id="sktRosterPhotoAttendanceV1">
+// Alur khusus SKT. Presensi reguler tetap memakai fungsi asli tanpa perubahan.
+const _renderAbsenTabBeforeSKTV1 = renderAbsenTab;
+const _capturePhotoAndAbsenBeforeSKTV1 = capturePhotoAndAbsen;
+state.currentRosterSchedule = null;
+state.currentRosterScheduleDate = '';
+
+function sktTodayKeyV1(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const v={};parts.forEach(x=>{if(x.type!=='literal')v[x.type]=x.value;});
+  return `${v.year}-${v.month}-${v.day}`;
+}
+function renderSKTAttendanceV1(){
+  const c=document.getElementById('content'); if(!c)return;
+  c.classList.add('presensi-compact');
+  c.innerHTML=`
+    <div class="card" style="margin:0 0 8px;padding:12px;border:1px solid #f3c969;background:#fffaf0">
+      <div style="font-weight:800;font-size:14px;color:#92400e">🩺 Presensi Sakit (SKT)</div>
+      <div style="font-size:12px;line-height:1.5;margin-top:5px;color:#78350f">Lampirkan surat dokter sebagai bukti presensi.</div>
+    </div>
+    <div id="cameraSlot" style="display:flex;flex-direction:column;gap:8px;flex:1;min-height:0">
+      <div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas><div class="cam-tools"><button type="button" class="cam-ico" id="btnCamSwitch" title="Ganti kamera depan/belakang" aria-label="Ganti kamera depan/belakang" onclick="toggleCameraFacing()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button></div></div>
+      <button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto Surat Dokter & Presensi</button>
+    </div>
+    <div id="resultSlot"></div>`;
+  startCamera();
+}
+
+renderAbsenTab = async function(){
+  const isHr=String(state.activeProfile?.role||'').toLowerCase()==='hr';
+  if(isHr){_renderAbsenTabBeforeSKTV1();return;}
+  const today=sktTodayKeyV1();
+  // Selalu ambil jadwal terbaru dari server. Jangan memakai cache jadwal di browser
+  // sepanjang hari, karena perubahan roster SKT -> SK (atau sebaliknya) harus langsung berlaku.
+  const c=document.getElementById('content');
+  if(c){c.classList.add('presensi-compact');c.innerHTML='<div class="card" style="text-align:center;padding:18px">Memeriksa jadwal presensi hari ini…</div>';}
+  const res=await gasCall('getMySchedule',{});
+  if(!res?.ok || !res.schedule){
+    // Jangan mengubah alur presensi reguler jika pemeriksaan awal jadwal gagal.
+    // Backend tetap menjadi otoritas akhir saat presensi dikirim.
+    showToast('Jadwal belum berhasil dimuat. Presensi reguler tetap mengikuti validasi server.');
+    _renderAbsenTabBeforeSKTV1();
+    return;
+  }
+  const rosterCode=String(res.schedule.code||'').toUpperCase().replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g,'');
+  state.currentRosterSchedule={...res.schedule,code:rosterCode};state.currentRosterScheduleDate=today;
+  // Hanya kode persis SKT yang membuka formulir sakit. SK tetap presensi shift sore reguler.
+  if(rosterCode==='SKT') renderSKTAttendanceV1();
+  else _renderAbsenTabBeforeSKTV1();
+};
+
+capturePhotoAndAbsen = async function(){
+  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr' && String(state.currentRosterSchedule?.code||'').toUpperCase()==='SKT'){
+    const photo=capturePhotoDataUrl_();
+    if(!photo){showToast('⚠️ Foto surat dokter wajib diambil. Pastikan kamera aktif.');return;}
+    const btn=document.getElementById('btnCapture');
+    if(btn){btn.disabled=true;btn.textContent='⏳ Mengunggah bukti SKT…';}
+    const key='ag_pending_skt_'+String(state.activeProfile.nik)+'_'+sktTodayKeyV1();
+    let pending=null;try{pending=JSON.parse(sessionStorage.getItem(key)||'null');}catch(_){pending=null;}
+    if(!pending?.id){pending={id:'SKT-'+Date.now()+'-'+String(state.activeProfile.nik)};sessionStorage.setItem(key,JSON.stringify(pending));}
+    const res=await gasCall('addAttendance',{id:pending.id,attendanceMode:'SKT',type:'sakit',photoBase64:photo});
+    if(!res?.ok){
+      if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto Surat Dokter & Presensi';}
+      showToast('⛔ '+(res?.message||res?.error||'Presensi SKT gagal disimpan.'));
+      return;
+    }
+    sessionStorage.removeItem(key);
+    state.activeProfile={...state.activeProfile,...(res.user||{})};
+    const r=res.record||{};
+    const localRecord={id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:'',lng:'',xpEarned:0,role:r.role,photo,photoUrl:r.photo_url};
+    state.records=state.records||[];state.records=state.records.filter(x=>String(x.id)!==String(r.id));state.records.unshift(localRecord);
+    localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));
+    updateGamifyBar();stopCamera();fireConfetti();
+    const slot=document.getElementById('cameraSlot');
+    if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:14px"><img src="${photo}" alt="Surat dokter yang diunggah" style="width:min(100%,220px);max-height:36vh;object-fit:contain;border-radius:10px;margin:0 auto 8px;display:block"><div style="font-size:15px;font-weight:800;color:var(--status-positive)">✅ Presensi Sakit Berhasil Disahkan</div><div style="font-size:12px;margin-top:5px">${r.date||sktTodayKeyV1()} • ${r.time||''} • Status: Sakit (SKT)</div>${r.photo_url?`<a href="${r.photo_url}" target="_blank" rel="noopener">Lihat surat dokter</a>`:''}<button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+    showToast('✅ Bukti surat dokter tersimpan. Presensi SKT langsung sah.');
+    return;
+  }
+  return _capturePhotoAndAbsenBeforeSKTV1();
+};
+</script>
