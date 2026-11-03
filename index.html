@@ -493,7 +493,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwtBSCKJQvvj5Z9nH8Qq553-jC9n7wxrDuBFcvWUmEtdG-XcNnTtaaq13LFqv62Z6mI/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyysNzl-IrDwL0Wwa_QR8BtC3XApSR4-dEIuieFYFGPRYZ1jt7n2Twcb5kWXYZMq-RM/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -501,7 +501,7 @@ async function gasCall(action, payload = {}) {
   if (!GAS_URL) return { ok:false, error:'GAS_URL belum diisi.' };
   const token = sessionStorage.getItem('ag_session_token') || '';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), action === 'addAttendance' ? 45000 : 12000);
+  const timeout = setTimeout(() => controller.abort(), action === 'resetAllHrisData' ? 90000 : (action === 'addAttendance' ? 45000 : (action === 'getPendingActivities' ? 20000 : 12000)));
   try {
     const res = await fetch(GAS_URL, {
       method:'POST',
@@ -535,9 +535,9 @@ function mapBootstrapToCaches(bs) {
     const sm = {}; bs.settings.forEach(x => sm[String(x.key || '').trim()] = x.value);
     const lat = Number(String(sm.office_lat ?? '').replace(',', '.'));
     const lng = Number(String(sm.office_lng ?? '').replace(',', '.'));
-    const maxDistance = Number(String(sm.max_distance_m ?? '100').replace(',', '.'));
+    const maxDistance = Number(String(sm.max_distance_m ?? '300').replace(',', '.'));
     if (Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180) {
-      state.officeConfig = { lat, lng, maxDistance: Number.isFinite(maxDistance) && maxDistance > 0 ? Math.min(maxDistance,100) : 100 };
+      state.officeConfig = { lat, lng, maxDistance: Number.isFinite(maxDistance) && maxDistance > 0 ? maxDistance : 300 };
       if (state.coords.lat != null && state.coords.lng != null) {
         state.distanceToOffice = getDistanceInMeters(state.coords.lat, state.coords.lng, lat, lng);
         updateLocationBadgeUI();
@@ -555,6 +555,12 @@ function mapBootstrapToCaches(bs) {
       role: idText_(su.role).toLowerCase()
     }));
     localStorage.setItem('registered_users', JSON.stringify(state.allUsers));
+    // Sinkronisasi bootstrap juga mengosongkan cache per-user yang mungkin masih berisi
+    // riwayat lama setelah HR menjalankan Reset Total HRIS.
+    state.allUsers.forEach(u => {
+      localStorage.setItem('records_' + String(u.nik), '[]');
+      localStorage.setItem('activities_' + String(u.nik), '[]');
+    });
   }
 
   // Records & Activities: per-nik, dikelompokkan dulu sebelum ditulis ke masing-masing cache 'records_<nik>' / 'activities_<nik>'.
@@ -626,8 +632,7 @@ function mapBootstrapToCaches(bs) {
       return {
         id: a.id, title: a.title, date: a.date, time: a.time, location: a.location,
         xpBonus: num_(a.xp_bonus), hrXpBonus: old?.hrXpBonus || 0,
-        scope: a.scope || 'company', teamLeaderNik: String(a.team_leader_nik || ''), creatorNik: String(a.created_by || ''),
-        createdAt: a.created_at || old?.createdAt || '', createdBy: String(a.created_by || old?.createdBy || '')
+        scope: a.scope || 'company', teamLeaderNik: String(a.team_leader_nik || ''), creatorNik: String(a.created_by || '')
       };
     });
     localStorage.setItem('agendas_all', JSON.stringify(mapped));
@@ -700,7 +705,7 @@ async function syncFromServer() {
 }
 
 const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
-const MAX_DISTANCE_METERS_FALLBACK = 100;
+const MAX_DISTANCE_METERS_FALLBACK = 300;
 
 const SHIFTS = {
   pagi:   { label: 'Pagi',   start: '07:00', end: '15:00', briefing: '06:45' },
@@ -736,7 +741,7 @@ let state = {
   selectedType: 'masuk',
   coords: { lat: null, lng: null },
   distanceToOffice: null,
-  officeConfig: { lat: -6.943844191925493, lng: 107.626902331005, maxDistance: 100 },
+  officeConfig: { lat: -6.943844191925493, lng: 107.626902331005, maxDistance: 300 },
   stream: null,
   currentTab: 'home',
   agendaSubTab: 'kegiatan',
@@ -799,9 +804,11 @@ function initData() {
     if (GAS_URL) {
       syncFromServer().then(success => {
         if (success) {
+          // Sinkronisasi latar belakang hanya memperbarui data/cache.
+          // Jangan memanggil switchTab di sini: pengguna mungkin sedang berada
+          // di subhalaman (mis. form HR), bukan di dashboard tab utama.
           loadUserData();
           renderBroadcastBanner();
-          switchTab(state.currentTab || 'home', false);
         }
       });
     }
@@ -1265,8 +1272,8 @@ function capturePhotoAndAbsen() {
       showToast('⚠️ Gagal membaca GPS! Pastikan izin lokasi aktif.');
       return;
     }
-    if (state.distanceToOffice > (state.officeConfig?.maxDistance || 100)) {
-      showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 100 meter.`);
+    if (state.distanceToOffice > (state.officeConfig?.maxDistance || 300)) {
+      showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 300 meter.`);
       return;
     }
   }
@@ -2791,7 +2798,7 @@ async function capturePhotoAndAbsen(){
   if(isHr)state.selectedShift='pagi';
   if(state.selectedShift!=='malam'){
     if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
-    if(state.distanceToOffice>(state.officeConfig?.maxDistance || 100)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 100m.`);return;}
+    if(state.distanceToOffice>(state.officeConfig?.maxDistance || 300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 300m.`);return;}
   }
   const capturedPhoto=capturePhotoDataUrl_();
   if(!capturedPhoto){showToast('⚠️ Foto wajib diambil. Pastikan kamera aktif.');return;}
@@ -3968,9 +3975,10 @@ async function submitAttendanceCorrectionV1011(attendanceId){
  const res=await gasCall('requestAttendanceCorrection',{attendanceId,requestedTime,requestedShift,reason});if(!res?.ok){showToast('Gagal mengirim: '+(res?.message||res?.error||'error'));return;}showToast(res.message||'Pengajuan terkirim.');renderAttendanceHistoryV1011();
 }
 async function renderAttendanceCorrectionsV1011(){
+ const navToken=window.__hrisNavSeq||0;
  const c=document.getElementById('content'),role=String(state.activeProfile.role||'').toLowerCase();
  c.innerHTML='<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">Memuat pengajuan dari server…</div></div>';
- const res=await gasCall('getAttendanceCorrections',{});if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat: ${escAttV1011(res?.message||res?.error||'error')}</div>`;return;}
+ const res=await gasCall('getAttendanceCorrections',{});if(navToken!==(window.__hrisNavSeq||0))return;if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat: ${escAttV1011(res?.message||res?.error||'error')}</div>`;return;}
  const list=(res.corrections||[]).filter(x=>x.status==='Pending');
  c.innerHTML=`<div class="home-hero"><div class="title">Tinjau Koreksi Absensi</div><div class="desc">${list.length} pengajuan menunggu keputusan.</div></div>${list.length?list.map(x=>`<div class="card" style="margin-bottom:10px"><strong>${escAttV1011(x.nama)} • ${escAttV1011(x.attendance_date)}</strong><div class="timeline-desc">Catatan ${escAttV1011(x.attendance_id)} · diminta ${escAttV1011(x.requested_time)} / shift ${escAttV1011(x.requested_shift)}</div><p>${escAttV1011(x.reason)}</p><label>Catatan peninjau</label><textarea id="attReviewNote_${escAttV1011(x.id)}" rows="2" placeholder="Catatan (opsional)"></textarea><div style="display:flex;gap:8px"><button class="btn" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Approved')">Setujui</button><button class="btn secondary" onclick="reviewAttendanceCorrectionV1011('${escAttV1011(x.id)}','Rejected')">Tolak</button></div></div>`).join(''):'<div class="card">Tidak ada pengajuan koreksi yang menunggu keputusan.</div>'}`;
 }
@@ -4198,11 +4206,9 @@ function updateHRRecipientCountV1(){const el=document.getElementById('hrRecipien
 <script id="hr-workflow-connection-v14">
 /* V14: synchronize activity approvals from Google Sheets before HR renders them. */
 const _renderAgendaTab_v14 = renderAgendaTab;
-renderAgendaTab = async function(){
-  const role=String(state.activeProfile?.role||'').toLowerCase();
-  if(role==='hr' && state.agendaSubTab==='kegiatan' && GAS_URL){
-    try { await syncFromServer(); } catch(e) { console.warn('Sync kegiatan HR gagal',e); }
-  }
+// Jangan jalankan bootstrap penuh setiap HR membuka Agenda > Kegiatan.
+// Antrean kegiatan diperbarui melalui endpoint ringan khusus di bagian akhir file.
+renderAgendaTab = function(){
   return _renderAgendaTab_v14();
 };
 /* Make the activity approval panel independent of older wrapper order. */
@@ -4255,6 +4261,9 @@ renderHRMessagesPage=async function(){
   return _renderHRMessagesPage_v14();
 };
 </script>
+
+
+
 </body>
 </html>
 <script id="v105ReportFilesFeedbackAndGlobalDates">
@@ -4375,10 +4384,13 @@ async function loadAttendanceHistoryV1015(force=false){
 }
 function prefetchAttendanceHistoryV1015(){if(!attHistoryNikV1015())return;loadAttendanceHistoryV1015(false).catch(()=>{});}
 async function renderAttendanceHistoryV1011(monthFilter,selectedDate){
+ const navToken=window.__hrisNavSeq||0;
  const c=document.getElementById('content');if(!c)return;
  const cached=attHistoryCacheV1015.nik===attHistoryNikV1015()&&Array.isArray(attHistoryCacheV1015.records);
  if(!cached)c.innerHTML='<div class="home-hero"><div class="title">Kehadiran Saya</div><div class="desc">Memuat data pertama kali…</div></div>';
- const res=await loadAttendanceHistoryV1015(false);if(!res||!res.ok){if(!cached)c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
+ const res=await loadAttendanceHistoryV1015(false);
+ if(navToken!==(window.__hrisNavSeq||0))return;
+ if(!res||!res.ok){if(!cached)c.innerHTML=`<div class="card">Gagal memuat kehadiran: ${escAttV1011(res?.message||res?.error||'Kesalahan koneksi')}</div>`;return;}
  const all=(res.records||[]).slice().sort((a,b)=>attDateKeyV1013(a.date).localeCompare(attDateKeyV1013(b.date))||attTimeV1012(a.time).localeCompare(attTimeV1012(b.time)));
  const today=new Date();const current=monthFilter||`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;const records=all.filter(r=>attDateKeyV1013(r.date).startsWith(current));
  const groups={};records.forEach(r=>{const d=attDateKeyV1013(r.date);if(d)(groups[d]||(groups[d]=[])).push(r);});
@@ -4428,6 +4440,7 @@ gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(actio
     const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
     const c=document.getElementById('content');
     c.innerHTML=`
+      <div class="v4-section-head"><strong>🧹 Reset Data Kehadiran</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Kembali ke Menu Reset</button></div>
       <div class="home-hero">
         <div class="eyebrow">Administrasi HR</div><div class="title">Reset Data Kehadiran</div>
         <div class="desc">Hanya baris pada sheet Attendance yang cocok dengan rentang tanggal dan pilihan karyawan yang akan dihapus. XP, profil, level/pencapaian, jadwal shift, agenda, dan data lain tidak diubah.</div>
@@ -4444,7 +4457,7 @@ gasCall=async function(action,payload={}){const res=await v1015PrevGasCall(actio
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
           <button class="btn btn-primary" onclick="previewAttendanceResetUI()">Periksa Data yang Cocok</button>
-          <button class="btn" onclick="switchTab('home',true)">Kembali</button>
+          <button class="btn" onclick="renderHRResetMenuV2()">Kembali ke Menu Reset</button>
         </div>
         <div id="attResetResult" style="margin-top:16px"></div>
       </div>
@@ -4518,7 +4531,7 @@ decideIdeaByHR = async function(id,status){
 <script id="hr-bulk-message-v1">
 const _renderHRMessagesPage_v1=renderHRMessagesPage;
 renderHRMessagesPage=function(){
- v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'&&!['false','0','no','nonaktif','inactive','tidak aktif'].includes(String(u.active??'true').trim().toLowerCase())),sent=state.privateMessages.filter(m=>String(m.fromNik||m.from_nik)===String(state.activeProfile.nik)).sort((a,b)=>String(b.id).localeCompare(String(a.id)));
+ v4EnsureStores();initUsers();const c=document.getElementById('content'),recipients=state.allUsers.filter(u=>u.role!=='hr'&&u.active!==false),sent=state.privateMessages.filter(m=>String(m.fromNik||m.from_nik)===String(state.activeProfile.nik)).sort((a,b)=>String(b.id).localeCompare(String(a.id)));
  c.innerHTML=`<div class="v4-section-head"><strong>📨 Pesan Pribadi HR</strong></div><div class="card"><label>Penerima</label><div class="hr-recipient-tools"><input id="hrRecipientSearch" placeholder="Cari nama / NIK..." oninput="filterHRRecipientsV1()" style="flex:1;min-width:150px"><button class="btn secondary" type="button" onclick="selectHRRecipientsV1(true)">Pilih semua</button><button class="btn secondary" type="button" onclick="selectHRRecipientsV1(false)">Kosongkan</button></div><div id="hrRecipientList" class="hr-recipient-list">${recipients.map((u,i)=>`<label class="hr-recipient-item" data-search="${String((u.nama||'')+' '+(u.nik||'')).toLowerCase().replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"><input type="checkbox" class="hr-recipient-check" value="${String(u.nik)}" checked><span>${v9Esc(u.nama||u.nik)} <small>(${v9Esc(u.nik||'')})</small></span></label>`).join('')}</div><div class="form-hint"><span id="hrRecipientCount">${recipients.length}</span> penerima dipilih. Pilih satu atau beberapa karyawan, atau semua sekaligus.</div><label>Judul Pesan</label><input id="msgSubject" placeholder="cth. Informasi kebijakan perusahaan"><label>Pesan</label><textarea id="msgText" rows="4" placeholder="Tulis pesan untuk penerima yang dipilih..."></textarea><label>Bonus XP per penerima (opsional)</label><select id="msgXpBonus"><option value="0">Tanpa bonus XP</option>${v5XpOptions(20)}</select><button class="btn" onclick="sendHRPrivateMessageBulkV1()">📨 Kirim Pesan</button></div><h2 class="section-title">Riwayat Pesan Terkirim</h2>${sent.length?sent.slice(0,100).map(m=>`<div class="message-card"><div class="message-title">${v9Esc(m.subject||'Pesan HR')} → ${v9Esc(m.toName||m.to_name||m.toNik||m.to_nik||'Penerima')}</div><div class="message-meta">${v9Esc(m.date||'')} • ${(m.readAt||m.read_at)?'Sudah dibaca':'Belum dibaca'}</div><div class="message-body">${v9Esc(m.text||'')}</div></div>`).join(''):'<div class="empty">Belum ada pesan terkirim.</div>'}`;
 };
 function filterHRRecipientsV1(){const q=(document.getElementById('hrRecipientSearch')?.value||'').toLowerCase();document.querySelectorAll('#hrRecipientList .hr-recipient-item').forEach(el=>el.style.display=el.dataset.search.includes(q)?'flex':'none');}
@@ -4582,126 +4595,461 @@ renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityApproval
 const _renderAgendaSubTabContent_activityFormV1=renderAgendaSubTabContent;
 renderAgendaSubTabContent=function(){_renderAgendaSubTabContent_activityFormV1();if(state.agendaSubTab!=='kegiatan')return;const role=String(state.activeProfile?.role||'').toLowerCase(),c=document.getElementById('agendaSubTabContent');if(!c)return;const btn=document.getElementById('btnSubmitAct');if(role!=='hr'&&btn){btn.textContent='📨 Kirim ke HR untuk Konfirmasi';}const card=c.querySelector('.card');if(card&&role!=='hr'&&!card.querySelector('.activity-approval-info')){const info=document.createElement('div');info.className='activity-approval-info';info.style.cssText='font-size:10.5px;line-height:1.5;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;padding:9px;border-radius:8px;margin:8px 0';info.innerHTML='ℹ️ Sebelum dikirim, Anda bisa mengubah pilihan jenis kegiatan atau membatalkan pilihan. Setelah dikirim, status menunggu konfirmasi HR dan pengajuan masih dapat dibatalkan sebelum HR memutuskan. <strong>Diterima: +XP sesuai jenis kegiatan. Ditolak: -XP dengan nilai yang sama.</strong>';const sel=document.getElementById('actType');if(sel)sel.parentNode.insertBefore(info,sel.nextSibling);}};
 </script>
-\n\n<style id="hr-agenda-management-v1">
-.hr-agenda-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
-.hr-agenda-actions .btn{width:auto;padding:7px 10px;font-size:10px}
-</style>
-<script id="hr-agenda-management-v1">
-function hrAgendaEscV1(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-const _renderAgendaListBeforeHRManageV1=renderAgendaList;
-renderAgendaList=function(){
-  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'||state.agendaSubTab!=='agenda')return _renderAgendaListBeforeHRManageV1();
-  const active=document.getElementById('agendaActiveListContent'),hist=document.getElementById('agendaHistoryListContent');if(!active||!hist)return;
-  const nik=String(state.activeProfile.nik||''),visible=typeof visibleAgendasForUser==='function'?visibleAgendasForUser():(state.agendas||[]);
-  const activeRows=[],historyRows=[];(visible||[]).forEach(ag=>{const status=(state.agendaUserStatus||{})[String(ag.id)+'_'+nik];status?historyRows.push({...ag,userRes:status}):activeRows.push(ag);});
-  active.innerHTML=activeRows.length?activeRows.map(ag=>{
-    const id=encodeURIComponent(String(ag.id)),company=String(ag.scope||'company')!=='team';
-    return `<div class="hr-agenda-item" style="border-bottom:1px solid var(--border);padding:12px 0" data-agenda-id="${hrAgendaEscV1(ag.id)}"><div><span class="role-chip" style="background:#ecfeff;color:#0e7490">${company?'🏢 AGENDA PERUSAHAAN':'👥 AGENDA TIM'}</span></div><div style="font-weight:800;font-size:12.5px;margin-top:6px">${hrAgendaEscV1(ag.title)}</div><div style="font-size:10.5px;color:#64748b;margin:4px 0">📅 ${hrAgendaEscV1(ag.date)} • ⏰ ${hrAgendaEscV1(ag.time||'-')} • 📍 ${hrAgendaEscV1(ag.location||'-')}</div><div style="font-size:10px;color:#2563eb">⭐ Bonus: +${Number(ag.xpBonus??ag.xp_bonus)||0} XP</div>${company?`<div class="hr-agenda-actions"><button class="btn secondary" onclick="editCompanyAgendaHR(decodeURIComponent('${id}'))">✏️ Edit</button><button class="btn danger" onclick="deleteCompanyAgendaHR(decodeURIComponent('${id}'))">🗑️ Hapus</button></div>`:''}</div>`;
-  }).join(''):'<div class="empty">Tidak ada agenda aktif.</div>';
-  hist.innerHTML=historyRows.length?historyRows.map(ag=>`<div class="hist-row"><div class="l"><div class="d">${hrAgendaEscV1(ag.title)}</div><div class="s">${hrAgendaEscV1(ag.date)} • ${ag.userRes.status==='mengikuti'?'Mengikuti':'Tidak mengikuti'}</div></div></div>`).join(''):'<div class="empty">Belum ada riwayat agenda yang perlu ditampilkan.</div>';
-};
-async function submitCreateAgendaByHR(){
-  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'){showToast('Akses ditolak.');return;}
-  const title=document.getElementById('hrAgendaTitle')?.value.trim()||'',date=document.getElementById('hrAgendaDate')?.value||'',time=document.getElementById('hrAgendaTime')?.value.trim()||'09:00 WIB',location=document.getElementById('hrAgendaLoc')?.value.trim()||'Kantor Pusat',xpBonus=Number(document.getElementById('hrAgendaXp')?.value)||50;
-  if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(date)){showToast('Judul dan tanggal agenda wajib diisi.');return;}
-  if(!GAS_URL){showToast('Koneksi server diperlukan untuk menerbitkan agenda.');return;}
-  const id='AG-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
-  const res=await gasCall('addAgenda',{id,title,date,time,location,xpBonus,scope:'company',createdBy:state.activeProfile.nik});
-  if(!res?.ok){showToast('❌ Agenda gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}
-  const item={id:String(res.item?.id||id),title,date,time,location,xpBonus,scope:'company'};
-  state.agendas=state.agendas||[];state.agendas.unshift(item);localStorage.setItem('agendas_all',JSON.stringify(state.agendas));
-  showToast('✅ Agenda Perusahaan berhasil diterbitkan. Judul yang sama boleh digunakan pada tanggal lain.');renderAgendaTab();
+
+<script id="nightAttendanceReviewV1">
+// HR-only queue: shift malam yang tidak absen dan kegagalan baca jadwal tidak otomatis menjadi Alpha.
+async function renderNightAttendanceReviewsV1(){
+ const navToken=window.__hrisNavSeq||0;
+ const c=document.getElementById('content');if(!c)return;
+ c.innerHTML='<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">Memuat catatan yang memerlukan keputusan HR…</div></div>';
+ const res=await gasCall('getPendingAttendanceReviews',{});
+ if(navToken!==(window.__hrisNavSeq||0))return;
+ if(!res?.ok){c.innerHTML=`<div class="card">Gagal memuat pemeriksaan: ${v101Esc(res?.message||res?.error||'Kesalahan koneksi')}<button class="btn secondary" onclick="renderHRDashboard()">Kembali</button></div>`;return;}
+ const rows=res.records||[];
+ c.innerHTML=`<div class="home-hero"><div class="title">Pemeriksaan Absensi</div><div class="desc">${rows.length} catatan menunggu keputusan. Tidak ada potongan XP sebelum HR memutuskan.</div></div><div class="att-actions"><button class="btn secondary" onclick="renderHRDashboard()">← Kembali</button></div>${rows.length?rows.map(r=>`<article class="card" style="margin:10px 0;padding:12px"><strong>${v101Esc(r.nama||r.nik)} • ${v101Esc(r.date||'')}</strong><div class="muted" style="font-size:11px;margin-top:5px">NIK ${v101Esc(r.nik||'—')} · Shift ${v101Esc(r.shift||'—')} · Status ${v101Esc(r.status_text||'—')}</div><div style="font-size:11px;line-height:1.5;margin-top:7px;overflow-wrap:anywhere">${v101Esc(String(r.source||'Menunggu pemeriksaan').replace(/^scheduleReadFailedMaintenance:/,'Gagal membaca jadwal: '))}</div><label style="display:block;margin-top:8px;font-size:11px">Catatan HR (opsional)</label><input id="nightReviewNote_${v101Esc(r.id)}" placeholder="Alasan keputusan" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #d1d5db;border-radius:8px"><div style="display:flex;gap:7px;margin-top:9px"><button class="btn danger" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Alpha')">Tetapkan Alpha (-20 XP)</button><button class="btn success" style="flex:1" onclick="resolveNightAttendanceReviewV1('${v101Esc(r.id)}','Libur')">Izinkan (0 XP)</button></div></article>`).join(''):'<div class="card">Tidak ada catatan yang menunggu pemeriksaan.</div>'}`;
 }
-async function editCompanyAgendaHR(id){
-  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'){showToast('Akses ditolak.');return;}
-  const ag=(state.agendas||[]).find(x=>String(x.id)===String(id));if(!ag||String(ag.scope||'company')==='team'){showToast('Agenda Perusahaan tidak ditemukan.');return;}
-  const title=prompt('Ubah judul agenda:',ag.title||'');if(title===null)return;
-  const date=prompt('Ubah tanggal (YYYY-MM-DD):',ag.date||'');if(date===null)return;
-  const time=prompt('Ubah waktu:',ag.time||'09:00 WIB');if(time===null)return;
-  const location=prompt('Ubah lokasi:',ag.location||'Kantor Pusat');if(location===null)return;
-  const xpInput=prompt('Ubah bonus XP (0–100):',String(ag.xpBonus??ag.xp_bonus??50));if(xpInput===null)return;
-  const xpBonus=Number(xpInput);if(!title.trim()||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(xpBonus)||xpBonus<0||xpBonus>100){showToast('Periksa judul, tanggal, dan bonus XP.');return;}
-  const res=await gasCall('updateAgenda',{id:String(id),title:title.trim(),date,time:time.trim(),location:location.trim(),xpBonus});
-  if(!res?.ok){showToast('❌ Agenda gagal diperbarui: '+(res?.message||res?.error||'coba lagi'));return;}
-  Object.assign(ag,{title:title.trim(),date,time:time.trim(),location:location.trim(),xpBonus});localStorage.setItem('agendas_all',JSON.stringify(state.agendas));
-  showToast('✅ Agenda berhasil diperbarui.');renderAgendaList();
+async function resolveNightAttendanceReviewV1(id,decision){
+ const label=decision==='Alpha'?'menetapkan Alpha dan mengurangi 20 XP':'mengizinkan ketidakhadiran tanpa penalti';
+ if(!confirm('Konfirmasi HR: '+label+'?'))return;
+ const note=document.getElementById('nightReviewNote_'+id)?.value||'';
+ const res=await gasCall('resolveAttendanceReview',{id,decision,note});
+ if(!res?.ok){showToast('❌ Keputusan gagal: '+(res?.message||res?.error||'coba lagi'));return;}
+ showToast('✅ '+(res.message||'Keputusan disimpan.'));
+ await renderNightAttendanceReviewsV1();
 }
-async function deleteCompanyAgendaHR(id){
-  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'){showToast('Akses ditolak.');return;}
-  const ag=(state.agendas||[]).find(x=>String(x.id)===String(id));if(!ag||String(ag.scope||'company')==='team'){showToast('Agenda Perusahaan tidak ditemukan.');return;}
-  if(!confirm('Hapus agenda “'+String(ag.title||'')+'” pada '+String(ag.date||'')+'? Data konfirmasi keikutsertaan agenda ini juga akan dihapus.'))return;
-  const res=await gasCall('deleteAgenda',{id:String(id)});if(!res?.ok){showToast('❌ Agenda gagal dihapus: '+(res?.message||res?.error||'coba lagi'));return;}
-  state.agendas=(state.agendas||[]).filter(x=>String(x.id)!==String(id));localStorage.setItem('agendas_all',JSON.stringify(state.agendas));
-  Object.keys(state.agendaUserStatus||{}).forEach(key=>{if(key.startsWith(String(id)+'_'))delete state.agendaUserStatus[key];});
-  showToast('🗑️ Agenda berhasil dihapus.');renderAgendaList();
-}
+const _nightReviewOldHRDashboardV1=renderHRDashboard;
+renderHRDashboard=function(){_nightReviewOldHRDashboardV1();const c=document.getElementById('content');if(!c)return;const grid=c.querySelector('.home-grid');if(!grid||grid.querySelector('[data-night-review-v1]'))return;const pendingBtn=document.createElement('button');pendingBtn.className='home-tile';pendingBtn.dataset.nightReviewV1='1';pendingBtn.innerHTML='<div class="icon">🕘</div><div class="title">Pemeriksaan Absensi</div><div class="desc">Tinjau shift malam atau jadwal yang belum dapat dipastikan.</div>';pendingBtn.onclick=renderNightAttendanceReviewsV1;grid.appendChild(pendingBtn);};
 </script>
 
 
-<script id="agenda-notification-confirmation-leader-kegiatan-v1">
-/* Fix final Agenda renderer regressions without changing existing business flows. */
-function agFixEscV1(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-function agFixRoleV1(){return String(state.activeProfile?.role||'').toLowerCase();}
-function agFixSeenKeyV1(){return 'agenda_company_seen_at_'+String(state.activeProfile?.nik||'');}
-function agFixNewCompanyAgendasV1(){
-  const key=agFixSeenKeyV1();let raw=localStorage.getItem(key);let seen=raw===null?0:Number(raw||0);
-  if(raw===null)localStorage.setItem(key,'0');
-  const today=typeof v6LocalIso==='function'?v6LocalIso():new Date().toISOString().slice(0,10);
-  return (state.agendas||[]).filter(a=>String(a.scope||'company')!=='team' && String(a.date||'')>=today && a.createdAt && new Date(a.createdAt).getTime()>seen);
-}
-function agFixMarkCompanySeenV1(){localStorage.setItem(agFixSeenKeyV1(),String(Date.now()));}
-function agFixAgendaBadgeV1(){const n=agFixNewCompanyAgendasV1().length;return n?`<span class="notify" style="position:static;display:inline-flex;margin-left:5px;vertical-align:middle">${n}</span>`:'';}
+<script id="sktRosterPhotoAttendanceV1">
+// Alur khusus SKT. Presensi reguler tetap memakai fungsi asli tanpa perubahan.
+const _renderAbsenTabBeforeSKTV1 = renderAbsenTab;
+const _capturePhotoAndAbsenBeforeSKTV1 = capturePhotoAndAbsen;
+state.currentRosterSchedule = null;
+state.currentRosterScheduleDate = '';
 
-/* Restore Kegiatan in the final Leader menu and retain its generic Member workflow. */
-const agFixPreviousRenderAgendaTabV1=renderAgendaTab;
-renderAgendaTab=function(){
-  const role=agFixRoleV1();
-  if(role==='hr')return agFixPreviousRenderAgendaTabV1();
-  const c=document.getElementById('content');if(!c)return;
-  if(role==='leader'&&!['team','agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='team';
-  if(role==='karyawan'&&!['agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
-  const newAgendaCount=agFixNewCompanyAgendasV1().length;
-  const badge=newAgendaCount?`<span class="notify" style="position:static;display:inline-flex;margin-left:5px;vertical-align:middle">${newAgendaCount}</span>`:'';
-  if(state.agendaSubTab==='agenda'&&newAgendaCount){agFixMarkCompanySeenV1();}
-  let tabs='';
-  if(role==='leader'){
-    tabs=`<button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button>
-      <button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan ${badge}</button>
-      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
-  }else{
-    tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda Saya ${badge}</button>
-      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
+function sktTodayKeyV1(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const v={};parts.forEach(x=>{if(x.type!=='literal')v[x.type]=x.value;});
+  return `${v.year}-${v.month}-${v.day}`;
+}
+function renderSKTAttendanceV1(){
+  const c=document.getElementById('content'); if(!c)return;
+  c.classList.add('presensi-compact');
+  c.innerHTML=`
+    <div class="card" style="margin:0 0 8px;padding:12px;border:1px solid #f3c969;background:#fffaf0">
+      <div style="font-weight:800;font-size:14px;color:#92400e">🩺 Presensi Sakit (SKT)</div>
+      <div style="font-size:12px;line-height:1.5;margin-top:5px;color:#78350f">Lampirkan surat dokter sebagai bukti presensi.</div>
+    </div>
+    <div id="cameraSlot" style="display:flex;flex-direction:column;gap:8px;flex:1;min-height:0">
+      <div class="camera-wrap" id="camWrap"><video id="camVideo" autoplay playsinline muted></video><canvas id="camCanvas" style="display:none"></canvas><div class="cam-tools"><button type="button" class="cam-ico" id="btnCamSwitch" title="Ganti kamera depan/belakang" aria-label="Ganti kamera depan/belakang" onclick="toggleCameraFacing()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></button></div></div>
+      <button class="btn" id="btnCapture" onclick="capturePhotoAndAbsen()">📷 Ambil Foto Surat Dokter & Presensi</button>
+    </div>
+    <div id="resultSlot"></div>`;
+  startCamera();
+}
+
+renderAbsenTab = async function(){
+  const navToken=window.__hrisNavSeq||0;
+  const isHr=String(state.activeProfile?.role||'').toLowerCase()==='hr';
+  if(isHr){_renderAbsenTabBeforeSKTV1();return;}
+  const today=sktTodayKeyV1();
+  // Selalu ambil jadwal terbaru dari server. Jangan memakai cache jadwal di browser
+  // sepanjang hari, karena perubahan roster SKT -> SK (atau sebaliknya) harus langsung berlaku.
+  const c=document.getElementById('content');
+  if(c){c.classList.add('presensi-compact');c.innerHTML='<div class="card" style="text-align:center;padding:18px">Memeriksa jadwal presensi hari ini…</div>';}
+  const res=await gasCall('getMySchedule',{});
+  if(navToken!==(window.__hrisNavSeq||0))return;
+  if(!res?.ok || !res.schedule){
+    // Jangan mengubah alur presensi reguler jika pemeriksaan awal jadwal gagal.
+    // Backend tetap menjadi otoritas akhir saat presensi dikirim.
+    showToast('Jadwal belum berhasil dimuat. Presensi reguler tetap mengikuti validasi server.');
+    _renderAbsenTabBeforeSKTV1();
+    return;
   }
-  c.innerHTML=`<div class="v4-section-head"><strong>Agenda</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${newAgendaCount&&state.agendaSubTab==='agenda'?`<div class="notice-strip" style="margin:8px 0"><span>🔔</span><span>Ada ${newAgendaCount} Agenda Perusahaan baru dari HR.</span><span class="count">${newAgendaCount}</span></div>`:''}<div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;
-  renderAgendaSubTabContent();
-  if(newAgendaCount&&state.agendaSubTab==='agenda'&&typeof renderBottomNav==='function')renderBottomNav();
+  const rosterCode=String(res.schedule.code||'').toUpperCase().replace(/[\s\u00A0\u200B-\u200D\uFEFF]+/g,'');
+  state.currentRosterSchedule={...res.schedule,code:rosterCode};state.currentRosterScheduleDate=today;
+  // Hanya kode persis SKT yang membuka formulir sakit. SK tetap presensi shift sore reguler.
+  if(rosterCode==='SKT') renderSKTAttendanceV1();
+  else _renderAbsenTabBeforeSKTV1();
 };
 
-/* Always show per-user confirmation controls for both company and team agendas. */
-const agFixPreviousRenderAgendaListV1=renderAgendaList;
-renderAgendaList=function(){
-  if(agFixRoleV1()==='hr')return agFixPreviousRenderAgendaListV1();
-  const active=document.getElementById('agendaActiveListContent'),hist=document.getElementById('agendaHistoryListContent');
-  if(!active||!hist)return agFixPreviousRenderAgendaListV1();
-  const nik=String(state.activeProfile?.nik||'');
-  const visible=typeof visibleAgendasForUser==='function'?visibleAgendasForUser():(state.agendas||[]);
-  const activeRows=[],historyRows=[];
-  (visible||[]).forEach(ag=>{const r=(state.agendaUserStatus||{})[String(ag.id)+'_'+nik];r?historyRows.push({...ag,userRes:r}):activeRows.push(ag);});
-  active.innerHTML=activeRows.length?activeRows.map(ag=>{
-    const id=encodeURIComponent(String(ag.id)),title=agFixEscV1(ag.title),date=agFixEscV1(ag.date),time=agFixEscV1(ag.time||'-'),loc=agFixEscV1(ag.location||'-');
-    const company=String(ag.scope||'company')!=='team',xp=typeof v5AgendaXp==='function'?Number(v5AgendaXp(ag))||0:Number(ag.xpBonus)||0;
-    return `<div style="border-bottom:1px solid var(--border);padding:11px 0"><div><span class="role-chip" style="${company?'background:#ecfeff;color:#0e7490':''}">${company?'🏢 AGENDA PERUSAHAAN':'👥 AGENDA TIM'}</span></div><div style="font-weight:800;font-size:12.5px;margin-top:6px">${title}</div><div style="font-size:10.5px;color:#64748b;margin:4px 0">📍 ${loc} • ⏰ ${time} • 📅 ${date}</div><div style="display:flex;gap:7px;margin-top:7px;flex-wrap:wrap"><button class="btn success" style="padding:7px;font-size:10px" onclick="resolveAgenda(decodeURIComponent('${id}'),'mengikuti')">✅ Mengikuti${xp>0?` (+${xp} XP)`:''}</button><button class="btn secondary" style="padding:7px;font-size:10px" onclick="resolveAgenda(decodeURIComponent('${id}'),'tidak')">❌ Tidak Mengikuti</button></div></div>`;
-  }).join(''):'<div class="empty">Tidak ada agenda aktif yang menunggu konfirmasi.</div>';
-  hist.innerHTML=historyRows.length?historyRows.map(ag=>`<div class="hist-row"><div class="l"><div class="d">${agFixEscV1(ag.title)}</div><div class="s">${String(ag.scope||'company')==='team'?'Agenda Tim':'Agenda Perusahaan'} • ${agFixEscV1(ag.date||'')}</div></div><div class="r"><span class="role-badge" style="background:${ag.userRes.status==='mengikuti'?'#ecfdf5':'#fef2f2'};color:${ag.userRes.status==='mengikuti'?'#047857':'#b91c1c'}">${ag.userRes.status==='mengikuti'?'✅ Mengikuti':'❌ Tidak Mengikuti'}</span><div class="s">${agFixEscV1(ag.userRes.date||'')}</div></div></div>`).join(''):'<div class="empty">Belum ada riwayat konfirmasi agenda.</div>';
-};
-
-/* Add a badge to the Leader/Member bottom Agenda navigation as well. */
-const agFixPreviousBottomNavV1=renderBottomNav;
-renderBottomNav=function(){
-  agFixPreviousBottomNavV1();
-  const role=agFixRoleV1();if(!['leader','karyawan'].includes(role))return;
-  const btn=[...document.querySelectorAll('#bottomNav .navbtn')].find(x=>(x.getAttribute('onclick')||'').includes("switchTab('agenda'"));
-  const n=agFixNewCompanyAgendasV1().length;
-  if(btn&&n){const label=btn.querySelector('span');if(label&&!label.querySelector('.agenda-new-badge-v1'))label.insertAdjacentHTML('beforeend',` <b class="agenda-new-badge-v1" style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#dc2626;color:white;font-size:9px;margin-left:3px">${n}</b>`);}
+capturePhotoAndAbsen = async function(){
+  if(String(state.activeProfile?.role||'').toLowerCase()!=='hr' && String(state.currentRosterSchedule?.code||'').toUpperCase()==='SKT'){
+    const photo=capturePhotoDataUrl_();
+    if(!photo){showToast('⚠️ Foto surat dokter wajib diambil. Pastikan kamera aktif.');return;}
+    const btn=document.getElementById('btnCapture');
+    if(btn){btn.disabled=true;btn.textContent='⏳ Mengunggah bukti SKT…';}
+    const key='ag_pending_skt_'+String(state.activeProfile.nik)+'_'+sktTodayKeyV1();
+    let pending=null;try{pending=JSON.parse(sessionStorage.getItem(key)||'null');}catch(_){pending=null;}
+    if(!pending?.id){pending={id:'SKT-'+Date.now()+'-'+String(state.activeProfile.nik)};sessionStorage.setItem(key,JSON.stringify(pending));}
+    const res=await gasCall('addAttendance',{id:pending.id,attendanceMode:'SKT',type:'sakit',photoBase64:photo});
+    if(!res?.ok){
+      if(btn){btn.disabled=false;btn.textContent='📷 Ambil Foto Surat Dokter & Presensi';}
+      showToast('⛔ '+(res?.message||res?.error||'Presensi SKT gagal disimpan.'));
+      return;
+    }
+    sessionStorage.removeItem(key);
+    state.activeProfile={...state.activeProfile,...(res.user||{})};
+    const r=res.record||{};
+    const localRecord={id:r.id,date:r.date,time:r.time,shift:r.shift,type:r.type,statusText:r.status_text,lat:'',lng:'',xpEarned:0,role:r.role,photo,photoUrl:r.photo_url};
+    state.records=state.records||[];state.records=state.records.filter(x=>String(x.id)!==String(r.id));state.records.unshift(localRecord);
+    localStorage.setItem('records_'+state.activeProfile.nik,JSON.stringify(state.records));
+    updateGamifyBar();stopCamera();fireConfetti();
+    const slot=document.getElementById('cameraSlot');
+    if(slot)slot.innerHTML=`<div class="card approved-border" style="text-align:center;padding:14px"><img src="${photo}" alt="Surat dokter yang diunggah" style="width:min(100%,220px);max-height:36vh;object-fit:contain;border-radius:10px;margin:0 auto 8px;display:block"><div style="font-size:15px;font-weight:800;color:var(--status-positive)">✅ Presensi Sakit Berhasil Disahkan</div><div style="font-size:12px;margin-top:5px">${r.date||sktTodayKeyV1()} • ${r.time||''} • Status: Sakit (SKT)</div>${r.photo_url?`<a href="${r.photo_url}" target="_blank" rel="noopener">Lihat surat dokter</a>`:''}<button class="btn secondary" style="margin-top:12px" onclick="switchTab('home',true)">Kembali ke Beranda</button></div>`;
+    showToast('✅ Bukti surat dokter tersimpan. Presensi SKT langsung sah.');
+    return;
+  }
+  return _capturePhotoAndAbsenBeforeSKTV1();
 };
 </script>
+
+<script id="hris-full-reset-v1">
+/* Reset Total HRIS khusus HR. Roster dan akun Users dipertahankan. */
+const _hrDashboardBeforeFullResetV1 = renderHRDashboard;
+renderHRDashboard = function(){
+  _hrDashboardBeforeFullResetV1();
+  const c = document.getElementById('content');
+  if (!c) return;
+  // Agenda & Broadcast tidak lagi ditampilkan sebagai menu/shortcut di beranda HR.
+  c.querySelectorAll('.hr-agenda-notice').forEach(el => el.remove());
+  c.querySelectorAll('.home-tile').forEach(el => {
+    const title = el.querySelector('.title');
+    if (title && title.textContent.trim() === 'Agenda & Broadcast') el.remove();
+  });
+  const grid = c.querySelector('.home-grid');
+  if (grid && !grid.querySelector('[data-hris-full-reset-v1]')) {
+    const btn = document.createElement('button');
+    btn.className = 'home-tile';
+    btn.setAttribute('data-hris-full-reset-v1', '1');
+    btn.innerHTML = '<div class="icon">♻️</div><div class="title">Reset Total HRIS</div><div class="desc">Kosongkan data operasional, pertahankan Users dan roster.</div>';
+    btn.onclick = renderHrisFullResetPageV1;
+    grid.appendChild(btn);
+  }
+};
+
+async function renderHrisFullResetPageV1(){
+  const navToken=window.__hrisNavSeq||0;
+  if (String(state.activeProfile?.role || '').toLowerCase() !== 'hr') { showToast('Akses khusus HR.'); return; }
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
+  const res = await gasCall('previewFullHrisReset', {});
+  if(navToken!==(window.__hrisNavSeq||0))return;
+  if (!res?.ok) { c.innerHTML = '<div class="v4-section-head"><strong>Reset Total HRIS</strong><button class="v4-back" onclick="switchTab(\'home\',true)">← Beranda</button></div><div class="card" style="color:#b42318">' + resetHrisEscV1(res?.message || res?.error || 'Gagal memeriksa data.') + '</div>'; return; }
+  const labels = {
+    Attendance:'Riwayat presensi', AttendanceCorrections:'Pengajuan koreksi presensi',
+    Activities:'Aktivitas', GoodDeeds:'Kontribusi / hal baik', Ideas:'Ide',
+    Leaves:'Pengajuan cuti / libur', Announcements:'Broadcast', Agendas:'Agenda',
+    AgendaStatus:'Status kehadiran agenda', PrivateMessages:'Pesan pribadi',
+    LeaderNotes:'Catatan Leader', MonthlyReports:'Laporan bulanan', HrAgendaDone:'Status pengingat HR'
+  };
+  const rows = Object.keys(res.tables || {}).map(k => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7"><span>${labels[k] || resetHrisEscV1(k)}</span><strong>${Number(res.tables[k] || 0)}</strong></div>`).join('');
+  c.innerHTML = `<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Menu Reset</button></div>
+    <div class="card" style="border:1px solid #fecaca;background:#fffafa;padding:14px">
+      <div style="font-size:14px;font-weight:800;color:#991b1b">⚠️ Tindakan permanen</div>
+      <p style="font-size:11px;line-height:1.6;color:#475569">Fitur ini menghapus data operasional seluruh pengguna. Sebelum penghapusan, sistem membuat salinan penuh spreadsheet di Google Drive. Jangan jalankan saat ada proses presensi atau input data yang sedang berlangsung.</p>
+      <div style="font-weight:800;font-size:12px;margin:12px 0 5px">Data yang akan dibersihkan</div>${rows}
+      <div style="display:flex;justify-content:space-between;padding:9px 0;font-weight:800"><span>Total baris data operasional</span><span>${Number(res.operationalRows || 0)}</span></div>
+    </div>
+    <div class="card" style="padding:14px;margin-top:10px">
+      <div style="font-weight:800;font-size:12px;margin-bottom:8px">Data yang dipertahankan</div>
+      <ul style="font-size:11px;line-height:1.8;padding-left:18px;margin:0">
+        <li><strong>Users (${Number(res.userCount || 0)} akun)</strong>: NIK, nama, username/kode unik, password, role, status, dan relasi tetap ada. XP dan streak menjadi 0.</li>
+        <li><strong>Roster (${Number(res.rosterRows || 0)} baris)</strong>: jadwal internal dan jadwal shift eksternal tidak dihapus.</li>
+        <li>Settings, hari libur, dan Audit Log tetap dipertahankan.</li>
+      </ul>
+      <div style="font-size:10px;color:#64748b;margin-top:10px">Backup penuh dibuat terlebih dahulu. Jika backup gagal, proses reset dibatalkan.</div>
+      <button id="btnHrisFullResetV1" class="btn btn-danger" style="width:100%;margin-top:14px" onclick="confirmHrisFullResetV1()">Backup & Reset Total HRIS</button>
+      <div id="hrisFullResetResultV1" style="margin-top:10px"></div>
+    </div>`;
+}
+
+function resetHrisEscV1(v){return String(v ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+
+async function confirmHrisFullResetV1(){
+  if (String(state.activeProfile?.role || '').toLowerCase() !== 'hr') { showToast('Akses khusus HR.'); return; }
+  const ok = confirm('PERINGATAN: Seluruh data operasional semua pengguna akan dihapus. Users tetap ada, tetapi XP dan streak menjadi 0. Roster, Settings, dan hari libur dipertahankan. Backup penuh akan dibuat terlebih dahulu. Lanjutkan?');
+  if (!ok) return;
+  const typed = prompt('Untuk mengonfirmasi, ketik persis: RESET TOTAL');
+  if (typed !== 'RESET TOTAL') { showToast('Reset dibatalkan. Teks konfirmasi tidak cocok.'); return; }
+  const btn = document.getElementById('btnHrisFullResetV1');
+  const result = document.getElementById('hrisFullResetResultV1');
+  if (btn) { btn.disabled = true; btn.textContent = 'Membuat backup dan mereset…'; }
+  if (result) result.textContent = 'Memproses reset. Jangan tutup halaman…';
+  const res = await gasCall('resetAllHrisData', {confirmation:typed});
+  if (!res?.ok) {
+    if (result) result.innerHTML = '<div style="color:#b42318;font-size:11px">Reset gagal: ' + resetHrisEscV1(res?.message || res?.error || 'Terjadi kesalahan.') + '</div>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Backup & Reset Total HRIS'; }
+    return;
+  }
+  // Tarik snapshot baru agar XP, streak, presensi, dan seluruh daftar yang tampil ikut bersih.
+  await syncFromServer();
+  updateGamifyBar();
+  if (result) result.innerHTML = `<div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:11px;font-size:11px;color:#166534"><strong>✅ Reset Total HRIS berhasil.</strong><p>${Number(res.usersPreserved || 0)} akun Users dipertahankan. XP dan streak seluruh pengguna = 0. Roster tetap utuh.</p><p>Backup penuh: <a href="${resetHrisEscV1(res.backupUrl)}" target="_blank" rel="noopener">${resetHrisEscV1(res.backupName || 'Buka backup Google Sheets')}</a></p><p>Data operasional yang dibersihkan:</p><ul>${Object.entries(res.cleared || {}).map(([k,v]) => `<li>${resetHrisEscV1(k)}: ${Number(v || 0)} baris</li>`).join('')}</ul></div>`;
+  if (btn) { btn.disabled = true; btn.textContent = 'Reset selesai'; }
+  showToast('✅ Reset Total HRIS selesai. Users dan roster dipertahankan.');
+}
+</script>
+
+<script id="hris-combined-reset-menu-v2">
+/* Satukan Reset Total dan Reset Data Kehadiran di satu pintu HR.
+   Menu dirender lokal tanpa RPC; preview baru diminta setelah HR memilih Reset Total. */
+(function(){
+  const priorDashboard = renderHRDashboard;
+  window.renderHRDashboard = function(){
+    priorDashboard();
+    const c=document.getElementById('content'); if(!c)return;
+    c.querySelectorAll('[data-att-reset-tile],[data-hris-full-reset-v1]').forEach(el=>el.remove());
+    c.querySelectorAll('.home-tile').forEach(el=>{
+      const t=el.querySelector('.title');
+      if(t && /^(Reset Data Kehadiran|Reset Total HRIS)$/.test(t.textContent.trim())) el.remove();
+    });
+    const grid=c.querySelector('.home-grid');
+    if(grid && !grid.querySelector('[data-combined-reset-menu-v2]')){
+      const tile=document.createElement('button'); tile.className='home-tile';
+      tile.dataset.combinedResetMenuV2='1';
+      tile.innerHTML='<div class="icon">🧰</div><div class="title">Menu Reset Data</div><div class="desc">Reset kehadiran atau reset total HRIS dalam satu tempat.</div>';
+      tile.onclick=window.renderHRResetMenuV2;
+      grid.appendChild(tile);
+    }
+  };
+  window.renderHRResetMenuV2=function(){
+    if(String(state.activeProfile?.role||'').toLowerCase()!=='hr'){showToast('Akses khusus HR.');return;}
+    const c=document.getElementById('content'); if(!c)return;
+    c.innerHTML=`<div class="v4-section-head"><strong>🧰 Menu Reset Data</strong><button class="v4-back" onclick="renderHRDashboard()">← Beranda HR</button></div>
+      <div class="home-hero"><div class="eyebrow">Administrasi HR</div><div class="title">Pilih jenis reset</div><div class="desc">Kedua tindakan membuat backup sebelum menghapus data. Periksa cakupan sebelum melanjutkan.</div></div>
+      <div class="home-grid" style="margin-top:12px">
+        <button class="home-tile" onclick="renderAttendanceResetAdmin()"><div class="icon">🧹</div><div class="title">Reset Data Kehadiran</div><div class="desc">Hapus presensi berdasarkan rentang tanggal dan pilihan karyawan. XP dan data lain tetap aman.</div></button>
+        <button class="home-tile" onclick="renderHrisFullResetPageV2()"><div class="icon">♻️</div><div class="title">Reset Total HRIS</div><div class="desc">Bersihkan data operasional, reset XP dan streak. Users dan roster dipertahankan.</div></button>
+      </div>`;
+  };
+  window.renderHrisFullResetPageV2=function(){
+    // Render loading state immediately; fetch preview only after user opens this option.
+    const c=document.getElementById('content'); if(!c)return;
+    c.innerHTML='<div class="v4-section-head"><strong>♻️ Reset Total HRIS</strong><button class="v4-back" onclick="renderHRResetMenuV2()">← Menu Reset</button></div><div class="card" style="padding:14px">Memeriksa data yang akan direset…</div>';
+    renderHrisFullResetPageV1();
+  };
+})();
+</script>
+
+
+<script id="hris-navigation-stability-v3">
+(function(){
+  // Satu penghitung untuk membedakan permintaan render yang masih aktif dari
+  // permintaan lama yang baru selesai setelah pengguna berpindah menu.
+  if(typeof window.__hrisNavSeq!=='number')window.__hrisNavSeq=0;
+  const previousSwitchTab=window.switchTab;
+  if(typeof previousSwitchTab==='function'){
+    window.switchTab=function(tab,pushState=true){
+      window.__hrisNavSeq++;
+      return previousSwitchTab.call(this,tab,pushState);
+    };
+  }
+
+  // Halaman khusus di dalam dashboard HR tidak selalu mengubah currentTab.
+  // Naikkan token saat halaman khusus tersebut dibuka agar hasil async lama
+  // tidak menimpa halaman yang lebih baru.
+  const bumpOnEntry=(name)=>{
+    const original=window[name];
+    if(typeof original!=='function'||original.__hrisNavGuarded)return;
+    const wrapped=function(){window.__hrisNavSeq++;return original.apply(this,arguments);};
+    wrapped.__hrisNavGuarded=true;
+    window[name]=wrapped;
+  };
+  ['renderHRResetMenuV2','renderHrisFullResetPageV2','renderAttendanceResetAdmin'].forEach(bumpOnEntry);
+
+  // popstate lama pernah didaftarkan lebih dari sekali pada versi sebelumnya.
+  // Tangani sekali di fase capture dan hentikan handler lama agar tidak terjadi
+  // dua kali render untuk satu tombol Back/Forward browser.
+  window.addEventListener('popstate',function(e){
+    e.stopImmediatePropagation();
+    const tab=e.state&&e.state.tab?e.state.tab:'home';
+    if(typeof window.switchTab==='function')window.switchTab(tab,false);
+  },true);
+})();
+</script>
+
+<script id="hris-activity-dedupe-and-leader-agenda-v1">
+/* Perbaikan Absen Kegiatan Tambahan:
+   - Leader mendapat tab Kegiatan pada menu Agenda.
+   - Semua role non-HR memakai form dan endpoint yang sama.
+   - Pengiriman dikunci di browser; server menjadi sumber data dan duplikasi tidak ditambahkan ke cache.
+*/
+(function(){
+  const originalRenderAgendaTab = window.renderAgendaTab;
+  window.renderAgendaTab = function(){
+    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
+    if (role === 'leader' && !['team','agenda','kegiatan'].includes(state.agendaSubTab)) {
+      state.agendaSubTab = 'team';
+    }
+    const c = document.getElementById('content');
+    if (!c) return;
+
+    // Pertahankan tata letak menu Leader saat ini, tambahkan tab Kegiatan tanpa mengubah menu HR/Anggota.
+    if (role !== 'leader') return originalRenderAgendaTab.apply(this, arguments);
+
+    const tabs = `
+      <button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button>
+      <button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button>
+      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">✨ Absen Kegiatan Tambahan (+XP)</button>`;
+    c.innerHTML = `<div class="v4-section-head"><strong>Agenda</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div><div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;
+    renderAgendaSubTabContent();
+  };
+
+  // Kunci di level browser berlaku sebelum confirm/fetch, sehingga klik ganda tidak membuat request kedua.
+  window.__activitySubmissionBusy = false;
+  window.submitActivity = async function(){
+    if (window.__activitySubmissionBusy) return;
+    const select = document.getElementById('actType');
+    if (!select) return;
+    const role = String(state.activeProfile && state.activeProfile.role || '').toLowerCase();
+    const type = select.value;
+    const typeLabel = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : type;
+    const note = (document.getElementById('actNote')?.value || '').trim() || 'Tanpa catatan';
+    const xp = vActXp(type);
+    const now = new Date();
+    const date = now.toISOString().slice(0,10);
+    const nik = String(state.activeProfile.nik);
+    const id = `act-${nik}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    const btn = document.getElementById('btnSubmitAct');
+    const originalText = btn ? btn.textContent : '';
+
+    if (role !== 'hr') {
+      if (!GAS_URL) { showToast('Koneksi server diperlukan agar pengajuan tercatat dan dapat dikonfirmasi HR.'); return; }
+      const accepted = confirm('Kirim pilihan “'+typeLabel+'” ke HR untuk dikonfirmasi?\n\nJika diterima: +'+xp+' XP. Jika ditolak: -'+xp+' XP. Selama masih menunggu, Anda dapat membatalkan pengajuan.');
+      if (!accepted) return;
+    }
+
+    window.__activitySubmissionBusy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Mengirim...'; }
+    try {
+      const res = await gasCall('addActivity', {id,type:typeLabel,note,date,xpRequested:xp});
+      if (!res || !res.ok) {
+        showToast('❌ Pengajuan kegiatan gagal dikirim: '+(res?.message || res?.error || 'Silakan coba lagi.'));
+        return;
+      }
+
+      if (role === 'hr') {
+        showToast(res.duplicate ? 'ℹ️ Kegiatan ini sudah tercatat.' : '✅ Kegiatan HR berhasil dicatat.');
+        renderAgendaTab();
+        return;
+      }
+
+      const item = res.activity || {};
+      const mapped = {
+        id:String(item.id || id), nik:String(item.nik || nik), nama:item.nama || state.activeProfile.nama || '',
+        role:item.role || role, type:item.type || typeLabel, note:item.note || note,
+        date:item.date || date, xpRequested:Number(item.xp_requested || xp), xpEarned:Number(item.xp_earned || 0),
+        status:item.status || 'Pending', reviewNote:item.review_note || '',
+        reviewedBy:item.reviewed_by || '', reviewedAt:item.reviewed_at || '', createdAt:item.created_at || ''
+      };
+      const ownKey = 'activities_' + nik;
+      const own = JSON.parse(localStorage.getItem(ownKey) || '[]');
+      if (!own.some(a => String(a.id) === String(mapped.id))) {
+        own.unshift(mapped);
+        localStorage.setItem(ownKey, JSON.stringify(own));
+      }
+      const all = JSON.parse(localStorage.getItem('activities_all') || '[]');
+      if (!all.some(a => String(a.id) === String(mapped.id))) {
+        all.unshift(mapped);
+        localStorage.setItem('activities_all', JSON.stringify(all));
+      }
+      showToast(res.duplicate ? 'ℹ️ Pengajuan serupa sudah terkirim. Tidak dibuat ulang.' : '📨 Pengajuan dikirim ke HR. XP diberikan setelah keputusan HR.');
+      renderAgendaTab();
+    } catch (err) {
+      showToast('❌ Terjadi kendala saat mengirim kegiatan: '+(err?.message || err));
+    } finally {
+      window.__activitySubmissionBusy = false;
+      const currentBtn = document.getElementById('btnSubmitAct');
+      if (currentBtn) { currentBtn.disabled = false; currentBtn.textContent = originalText || '📨 Kirim ke HR untuk Konfirmasi'; }
+    }
+  };
+})();
+</script>
+
+<script id="hr-agenda-activities-fast-load-v1">
+/* HR Agenda > Kegiatan: render segera, lalu ambil hanya baris Activities berstatus Pending.
+   Menghindari syncFromServer()/bootstrap penuh dan menyisakan satu panel konfirmasi. */
+(function(){
+  let loadSeq = 0;
+
+  function isHrActivitiesView(){
+    return String(state.activeProfile?.role || '').toLowerCase() === 'hr' && state.agendaSubTab === 'kegiatan';
+  }
+  function escapeText(v){
+    return typeof vActEsc === 'function' ? vActEsc(String(v ?? '')) : String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function ensureSinglePanel(){
+    const c = document.getElementById('agendaSubTabContent');
+    if(!c) return null;
+    // Bersihkan panel lama yang dibuat oleh dua renderer legacy.
+    c.querySelectorAll('.activity-approval-panel-v14,[data-activity-approval-legacy="1"],.hr-fast-activity-panel').forEach(el=>el.remove());
+    [...c.querySelectorAll('section')].forEach(el=>{
+      const heading = el.querySelector('h2');
+      if(heading && /Konfirmasi Kegiatan Anggota/i.test(heading.textContent || '')) el.remove();
+    });
+    const panel = document.createElement('section');
+    panel.className = 'hr-fast-activity-panel';
+    panel.innerHTML = '<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota &amp; Leader</h2><div class="card" style="padding:12px"><div class="muted">⏳ Memuat pengajuan kegiatan…</div></div>';
+    c.prepend(panel);
+    return panel;
+  }
+  function renderPanel(panel, activities){
+    if(!panel || !panel.isConnected) return;
+    const pending = (Array.isArray(activities) ? activities : []).filter(a=>String(a.status || 'Pending').toLowerCase()==='pending');
+    const seen = new Set();
+    const unique = pending.filter(a=>{const id=String(a.id || '');if(!id || seen.has(id))return false;seen.add(id);return true;});
+    const cards = unique.map(a=>{
+      const xp = Number(a.xp_requested || a.xpRequested || (typeof vActXp==='function'?vActXp(a.type):30)) || 0;
+      const id = String(a.id || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<div class="card" style="padding:10px;margin:7px 0">
+        <div style="font-weight:800;font-size:12px">${escapeText(a.nama || a.nik || 'Pengguna')} — ${escapeText(a.type || 'Kegiatan')}</div>
+        <div class="muted" style="font-size:10px;margin-top:4px">${escapeText(a.role || '')} • ${escapeText(a.date || '')} • Potensi XP ${xp}</div>
+        <div style="font-size:11px;margin-top:6px">${escapeText(a.note || 'Tanpa catatan')}</div>
+        <div style="display:flex;gap:6px;margin-top:9px">
+          <button class="btn success" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${id}','approve')">✅ Terima (+${xp} XP)</button>
+          <button class="btn danger" style="flex:1;padding:7px;font-size:10px" onclick="decideActivityHRV1('${id}','reject')">❌ Tolak (-${xp} XP)</button>
+        </div></div>`;
+    }).join('');
+    panel.innerHTML = `<h2 class="section-title">📥 Konfirmasi Kegiatan Anggota &amp; Leader (${unique.length})</h2>
+      <div class="form-hint" style="margin-bottom:8px">Tinjau pengajuan dari Anggota maupun Leader. Diterima: +XP sesuai jenis kegiatan; ditolak: -XP dengan nilai yang sama. Pengajuan yang dibatalkan tidak dapat diproses.</div>
+      ${cards || '<div class="card"><div class="empty">Tidak ada pengajuan kegiatan yang menunggu konfirmasi.</div></div>'}`;
+  }
+  async function fetchPending(panel, seq){
+    if(!GAS_URL){if(panel)panel.innerHTML='<h2 class="section-title">📥 Konfirmasi Kegiatan</h2><div class="card">Koneksi server belum tersedia.</div>';return;}
+    const res = await gasCall('getPendingActivities', {});
+    if(seq !== loadSeq || !isHrActivitiesView()) return;
+    const currentPanel = document.querySelector('#agendaSubTabContent .hr-fast-activity-panel');
+    if(!currentPanel) return;
+    if(!res?.ok){
+      currentPanel.innerHTML = `<h2 class="section-title">📥 Konfirmasi Kegiatan</h2><div class="card"><div style="color:#b91c1c;font-size:12px">Gagal memuat pengajuan: ${escapeText(res?.message || res?.error || 'Koneksi bermasalah.')}</div><button class="btn secondary" style="margin-top:9px" onclick="window.refreshHrPendingActivities()">↻ Coba lagi</button></div>`;
+      return;
+    }
+    renderPanel(currentPanel, res.activities || []);
+  }
+  window.refreshHrPendingActivities = function(){
+    if(!isHrActivitiesView()) return;
+    const panel = document.querySelector('#agendaSubTabContent .hr-fast-activity-panel') || ensureSinglePanel();
+    const seq = ++loadSeq;
+    if(panel) panel.innerHTML='<h2 class="section-title">📥 Konfirmasi Kegiatan</h2><div class="card"><div class="muted">⏳ Memuat pengajuan kegiatan…</div></div>';
+    fetchPending(panel, seq);
+  };
+
+  const previousRenderAgendaTab = window.renderAgendaTab;
+  window.renderAgendaTab = function(){
+    const result = previousRenderAgendaTab.apply(this, arguments);
+    if(isHrActivitiesView()){
+      const panel = ensureSinglePanel();
+      const seq = ++loadSeq;
+      fetchPending(panel, seq);
+    } else {
+      // Invalidasi respons yang datang setelah pengguna meninggalkan menu Kegiatan.
+      loadSeq++;
+    }
+    return result;
+  };
+})();
+</script>
+
