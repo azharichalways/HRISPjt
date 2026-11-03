@@ -493,7 +493,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzMuGGAOpGo0X2yBTT21V359DdUnSk6vOWrIdb6kDrThnXxPc1AA7D7lpWmdqpDvwIH/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzYPyAioyLaxreqTfEtSXeEkHQzV1Fbd6T64sbL7YrZRAlKw8Sqr4zXzF45c2T5FEc/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -626,7 +626,8 @@ function mapBootstrapToCaches(bs) {
       return {
         id: a.id, title: a.title, date: a.date, time: a.time, location: a.location,
         xpBonus: num_(a.xp_bonus), hrXpBonus: old?.hrXpBonus || 0,
-        scope: a.scope || 'company', teamLeaderNik: String(a.team_leader_nik || ''), creatorNik: String(a.created_by || '')
+        scope: a.scope || 'company', teamLeaderNik: String(a.team_leader_nik || ''), creatorNik: String(a.created_by || ''),
+        createdAt: a.created_at || old?.createdAt || '', createdBy: String(a.created_by || old?.createdBy || '')
       };
     });
     localStorage.setItem('agendas_all', JSON.stringify(mapped));
@@ -4634,4 +4635,73 @@ async function deleteCompanyAgendaHR(id){
   Object.keys(state.agendaUserStatus||{}).forEach(key=>{if(key.startsWith(String(id)+'_'))delete state.agendaUserStatus[key];});
   showToast('🗑️ Agenda berhasil dihapus.');renderAgendaList();
 }
+</script>
+
+
+<script id="agenda-notification-confirmation-leader-kegiatan-v1">
+/* Fix final Agenda renderer regressions without changing existing business flows. */
+function agFixEscV1(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function agFixRoleV1(){return String(state.activeProfile?.role||'').toLowerCase();}
+function agFixSeenKeyV1(){return 'agenda_company_seen_at_'+String(state.activeProfile?.nik||'');}
+function agFixNewCompanyAgendasV1(){
+  const key=agFixSeenKeyV1();let raw=localStorage.getItem(key);let seen=raw===null?0:Number(raw||0);
+  if(raw===null)localStorage.setItem(key,'0');
+  const today=typeof v6LocalIso==='function'?v6LocalIso():new Date().toISOString().slice(0,10);
+  return (state.agendas||[]).filter(a=>String(a.scope||'company')!=='team' && String(a.date||'')>=today && a.createdAt && new Date(a.createdAt).getTime()>seen);
+}
+function agFixMarkCompanySeenV1(){localStorage.setItem(agFixSeenKeyV1(),String(Date.now()));}
+function agFixAgendaBadgeV1(){const n=agFixNewCompanyAgendasV1().length;return n?`<span class="notify" style="position:static;display:inline-flex;margin-left:5px;vertical-align:middle">${n}</span>`:'';}
+
+/* Restore Kegiatan in the final Leader menu and retain its generic Member workflow. */
+const agFixPreviousRenderAgendaTabV1=renderAgendaTab;
+renderAgendaTab=function(){
+  const role=agFixRoleV1();
+  if(role==='hr')return agFixPreviousRenderAgendaTabV1();
+  const c=document.getElementById('content');if(!c)return;
+  if(role==='leader'&&!['team','agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='team';
+  if(role==='karyawan'&&!['agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
+  const newAgendaCount=agFixNewCompanyAgendasV1().length;
+  const badge=newAgendaCount?`<span class="notify" style="position:static;display:inline-flex;margin-left:5px;vertical-align:middle">${newAgendaCount}</span>`:'';
+  if(state.agendaSubTab==='agenda'&&newAgendaCount){agFixMarkCompanySeenV1();}
+  let tabs='';
+  if(role==='leader'){
+    tabs=`<button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button>
+      <button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan ${badge}</button>
+      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
+  }else{
+    tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda Saya ${badge}</button>
+      <button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
+  }
+  c.innerHTML=`<div class="v4-section-head"><strong>Agenda</strong><button class="v4-back" onclick="switchTab('home',true)">← Beranda</button></div>${newAgendaCount&&state.agendaSubTab==='agenda'?`<div class="notice-strip" style="margin:8px 0"><span>🔔</span><span>Ada ${newAgendaCount} Agenda Perusahaan baru dari HR.</span><span class="count">${newAgendaCount}</span></div>`:''}<div class="subnav-tabs">${tabs}</div><div id="agendaSubTabContent"></div>`;
+  renderAgendaSubTabContent();
+  if(newAgendaCount&&state.agendaSubTab==='agenda'&&typeof renderBottomNav==='function')renderBottomNav();
+};
+
+/* Always show per-user confirmation controls for both company and team agendas. */
+const agFixPreviousRenderAgendaListV1=renderAgendaList;
+renderAgendaList=function(){
+  if(agFixRoleV1()==='hr')return agFixPreviousRenderAgendaListV1();
+  const active=document.getElementById('agendaActiveListContent'),hist=document.getElementById('agendaHistoryListContent');
+  if(!active||!hist)return agFixPreviousRenderAgendaListV1();
+  const nik=String(state.activeProfile?.nik||'');
+  const visible=typeof visibleAgendasForUser==='function'?visibleAgendasForUser():(state.agendas||[]);
+  const activeRows=[],historyRows=[];
+  (visible||[]).forEach(ag=>{const r=(state.agendaUserStatus||{})[String(ag.id)+'_'+nik];r?historyRows.push({...ag,userRes:r}):activeRows.push(ag);});
+  active.innerHTML=activeRows.length?activeRows.map(ag=>{
+    const id=encodeURIComponent(String(ag.id)),title=agFixEscV1(ag.title),date=agFixEscV1(ag.date),time=agFixEscV1(ag.time||'-'),loc=agFixEscV1(ag.location||'-');
+    const company=String(ag.scope||'company')!=='team',xp=typeof v5AgendaXp==='function'?Number(v5AgendaXp(ag))||0:Number(ag.xpBonus)||0;
+    return `<div style="border-bottom:1px solid var(--border);padding:11px 0"><div><span class="role-chip" style="${company?'background:#ecfeff;color:#0e7490':''}">${company?'🏢 AGENDA PERUSAHAAN':'👥 AGENDA TIM'}</span></div><div style="font-weight:800;font-size:12.5px;margin-top:6px">${title}</div><div style="font-size:10.5px;color:#64748b;margin:4px 0">📍 ${loc} • ⏰ ${time} • 📅 ${date}</div><div style="display:flex;gap:7px;margin-top:7px;flex-wrap:wrap"><button class="btn success" style="padding:7px;font-size:10px" onclick="resolveAgenda(decodeURIComponent('${id}'),'mengikuti')">✅ Mengikuti${xp>0?` (+${xp} XP)`:''}</button><button class="btn secondary" style="padding:7px;font-size:10px" onclick="resolveAgenda(decodeURIComponent('${id}'),'tidak')">❌ Tidak Mengikuti</button></div></div>`;
+  }).join(''):'<div class="empty">Tidak ada agenda aktif yang menunggu konfirmasi.</div>';
+  hist.innerHTML=historyRows.length?historyRows.map(ag=>`<div class="hist-row"><div class="l"><div class="d">${agFixEscV1(ag.title)}</div><div class="s">${String(ag.scope||'company')==='team'?'Agenda Tim':'Agenda Perusahaan'} • ${agFixEscV1(ag.date||'')}</div></div><div class="r"><span class="role-badge" style="background:${ag.userRes.status==='mengikuti'?'#ecfdf5':'#fef2f2'};color:${ag.userRes.status==='mengikuti'?'#047857':'#b91c1c'}">${ag.userRes.status==='mengikuti'?'✅ Mengikuti':'❌ Tidak Mengikuti'}</span><div class="s">${agFixEscV1(ag.userRes.date||'')}</div></div></div>`).join(''):'<div class="empty">Belum ada riwayat konfirmasi agenda.</div>';
+};
+
+/* Add a badge to the Leader/Member bottom Agenda navigation as well. */
+const agFixPreviousBottomNavV1=renderBottomNav;
+renderBottomNav=function(){
+  agFixPreviousBottomNavV1();
+  const role=agFixRoleV1();if(!['leader','karyawan'].includes(role))return;
+  const btn=[...document.querySelectorAll('#bottomNav .navbtn')].find(x=>(x.getAttribute('onclick')||'').includes("switchTab('agenda'"));
+  const n=agFixNewCompanyAgendasV1().length;
+  if(btn&&n){const label=btn.querySelector('span');if(label&&!label.querySelector('.agenda-new-badge-v1'))label.insertAdjacentHTML('beforeend',` <b class="agenda-new-badge-v1" style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:#dc2626;color:white;font-size:9px;margin-left:3px">${n}</b>`);}
+};
 </script>
