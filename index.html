@@ -493,7 +493,7 @@
 <script>
 // Isi manual dengan URL Web App hasil Deploy Google Apps Script (Code.gs), format:
 // https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXX/exec
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyysNzl-IrDwL0Wwa_QR8BtC3XApSR4-dEIuieFYFGPRYZ1jt7n2Twcb5kWXYZMq-RM/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxrRBrQBs4Uy88YNU9MgVr-_3Tv5G_yM60ONYoqbusnSPHefXJ06BoL3bbOJIhXw43I/exec';
 
 // Panggil backend Google Apps Script (Code.gs). action = nama action di doPost (mis. 'login', 'saveUser').
 // Mengembalikan {ok:true,...} dari server, atau {ok:false,error:'...'} kalau GAS_URL belum diisi / gagal koneksi.
@@ -501,7 +501,7 @@ async function gasCall(action, payload = {}) {
   if (!GAS_URL) return { ok:false, error:'GAS_URL belum diisi.' };
   const token = sessionStorage.getItem('ag_session_token') || '';
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), action === 'resetAllHrisData' ? 90000 : (action === 'addAttendance' ? 45000 : (action === 'getPendingActivities' ? 20000 : 12000)));
+  const timeout = setTimeout(() => controller.abort(), action === 'resetAllHrisData' ? 90000 : (action === 'addAttendance' ? 45000 : (action === 'getPendingActivities' ? 20000 : (action === 'sendBulkPrivateMessage' ? 45000 : 12000))));
   try {
     const res = await fetch(GAS_URL, {
       method:'POST',
@@ -535,9 +535,9 @@ function mapBootstrapToCaches(bs) {
     const sm = {}; bs.settings.forEach(x => sm[String(x.key || '').trim()] = x.value);
     const lat = Number(String(sm.office_lat ?? '').replace(',', '.'));
     const lng = Number(String(sm.office_lng ?? '').replace(',', '.'));
-    const maxDistance = Number(String(sm.max_distance_m ?? '300').replace(',', '.'));
+    const maxDistance = Number(String(sm.max_distance_m ?? '100').replace(',', '.'));
     if (Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180) {
-      state.officeConfig = { lat, lng, maxDistance: Number.isFinite(maxDistance) && maxDistance > 0 ? maxDistance : 300 };
+      state.officeConfig = { lat, lng, maxDistance: Number.isFinite(maxDistance) && maxDistance > 0 ? Math.min(maxDistance, 100) : 100 };
       if (state.coords.lat != null && state.coords.lng != null) {
         state.distanceToOffice = getDistanceInMeters(state.coords.lat, state.coords.lng, lat, lng);
         updateLocationBadgeUI();
@@ -705,7 +705,7 @@ async function syncFromServer() {
 }
 
 const OFFICE_COORDS = { lat: -6.943844191925493, lng: 107.626902331005 };
-const MAX_DISTANCE_METERS_FALLBACK = 300;
+const MAX_DISTANCE_METERS_FALLBACK = 100;
 
 const SHIFTS = {
   pagi:   { label: 'Pagi',   start: '07:00', end: '15:00', briefing: '06:45' },
@@ -741,7 +741,7 @@ let state = {
   selectedType: 'masuk',
   coords: { lat: null, lng: null },
   distanceToOffice: null,
-  officeConfig: { lat: -6.943844191925493, lng: 107.626902331005, maxDistance: 300 },
+  officeConfig: { lat: -6.943844191925493, lng: 107.626902331005, maxDistance: 100 },
   stream: null,
   currentTab: 'home',
   agendaSubTab: 'kegiatan',
@@ -1272,8 +1272,8 @@ function capturePhotoAndAbsen() {
       showToast('⚠️ Gagal membaca GPS! Pastikan izin lokasi aktif.');
       return;
     }
-    if (state.distanceToOffice > (state.officeConfig?.maxDistance || 300)) {
-      showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 300 meter.`);
+    if (state.distanceToOffice > (state.officeConfig?.maxDistance || 100)) {
+      showToast(`⛔ Presensi Ditolak! Jarak Anda (${state.distanceToOffice}m) melebihi batas 100 meter.`);
       return;
     }
   }
@@ -2193,7 +2193,7 @@ function renderHRDashboard() {
     ${totalPending ? `<div class="notice-strip"><span>🔔</span><span>${totalPending} ide sudah diteruskan Leader dan membutuhkan keputusan HR.</span><span class="count">${totalPending}</span></div>` : ''}
     <div class="home-section-title">Menu Utama</div>
     <div class="home-grid">
-      <button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun, role, dan relasi Leader–anggota.</div></button>
+      <button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun, role, dan relasi Leader–anggota.</div></button>
       <button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Kinerja & Pencapaian</div><div class="desc">Kedisiplinan, kontribusi, ide, kegiatan, dan XP.</div></button>
       <button class="home-tile" onclick="switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda perusahaan dan komunikasi internal.</div></button>
       <button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Putuskan ide dan pantau kontribusi anggota.</div>${forwardedIdeas ? `<span class="notify">${forwardedIdeas}</span>` : ''}</button>
@@ -2798,7 +2798,7 @@ async function capturePhotoAndAbsen(){
   if(isHr)state.selectedShift='pagi';
   if(state.selectedShift!=='malam'){
     if(state.distanceToOffice===null){showToast('⚠️ GPS belum siap. Pastikan izin lokasi aktif.');return;}
-    if(state.distanceToOffice>(state.officeConfig?.maxDistance || 300)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 300m.`);return;}
+    if(state.distanceToOffice>(state.officeConfig?.maxDistance || 100)){showToast(`⛔ Jarak ${state.distanceToOffice}m melebihi batas 100m.`);return;}
   }
   const capturedPhoto=capturePhotoDataUrl_();
   if(!capturedPhoto){showToast('⚠️ Foto wajib diambil. Pastikan kamera aktif.');return;}
@@ -2904,7 +2904,7 @@ function submitMonthlyReport(){const month=document.getElementById('reportMonth'
 function renderHRDashboard(){
   v4EnsureStores();initUsers();const c=document.getElementById('content'),users=state.allUsers.filter(u=>u.role!=='hr'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,notes=state.leaderNotes.length,reports=state.monthlyReports.length,score=v4KpiScore(state.activeProfile.nik),unreadSent=state.privateMessages.filter(m=>m.fromNik===state.activeProfile.nik).length;
   c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">XP HR berasal dari presensi dan aktivitas HR. Hari libur tidak mengurangi KPI.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${score}</strong><span>Skor KPI</span></div><div><strong>${state.activeProfile.streak||0}</strong><span>Streak</span></div></div></div>
-  <div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda perusahaan.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Keputusan ide dari Leader.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota diteruskan Leader.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim dari Leader.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="switchTab('hr_messages',true)"><div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim notifikasi penting ke akun.</div></button></div>`;
+  <div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda perusahaan.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Keputusan ide dari Leader.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota diteruskan Leader.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim dari Leader.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="switchTab('hr_messages',true)"><div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim notifikasi penting ke akun.</div></button></div>`;
 }
 
 function renderKinerjaTab(){
@@ -3111,7 +3111,7 @@ function renderLeaderDashboard(){
 
 function renderHRDashboard(){
   v6ReconcileAllUsers();v4EnsureStores();initUsers();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,notes=state.leaderNotes.length,reports=state.monthlyReports.length,k=v6Kpi(state.activeProfile.nik);const avgSla=leaders.length?Math.round(leaders.reduce((s,l)=>s+v6LeaderSlaStats(l.nik).score,0)/leaders.length):100;
-  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="switchTab('hr_messages',true)"><div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Notifikasi penting.</div></button></div>`;
+  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="switchTab('hr_messages',true)"><div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Notifikasi penting.</div></button></div>`;
 }
 
 // Jalankan rekonsiliasi saat aplikasi dibuka dan saat login.
@@ -3273,7 +3273,7 @@ v4KpiScore=function(nik){return v6Kpi(nik).score;};
 
 renderHRDashboard=function(){
   v6ReconcileAllUsers();v4EnsureStores();initUsers();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,notes=state.leaderNotes.length,reports=state.monthlyReports.length,k=v6Kpi(state.activeProfile.nik);const avgSla=leaders.length?Math.round(leaders.reduce((s,l)=>s+v6LeaderSlaStats(l.nik).score,0)/leaders.length):100;
-  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='agenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, broadcast, kegiatan & pesan pribadi.</div></button></div>`;
+  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${notes?`<span class="notify">${notes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='agenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, broadcast, kegiatan & pesan pribadi.</div></button></div>`;
 };
 
 
@@ -3347,7 +3347,7 @@ renderHRDashboard = function(){
   v6ReconcileAllUsers();v4EnsureStores();initUsers();
   const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,unreadNotes=v8UnreadLeaderNotes().length,reports=state.monthlyReports.length,k=v6Kpi(state.activeProfile.nik);
   const avgSla=leaders.length?Math.round(leaders.reduce((s,l)=>s+v6LeaderSlaStats(l.nik).score,0)/leaders.length):100;
-  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='agenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, broadcast, kegiatan & pesan pribadi.</div></button></div>`;
+  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${state.activeProfile.nama}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div><div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('kinerja',true)"><div class="icon">📊</div><div class="title">Skor & Penyebab</div><div class="desc">KPI semua role + SLA + Alpha.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${reports?`<span class="notify">${reports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='agenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, broadcast, kegiatan & pesan pribadi.</div></button></div>`;
 };
 
 // (Back/forward navigation ditangani oleh listener 'popstate' di initData() — lihat komentar di atasnya.)
@@ -3461,7 +3461,7 @@ renderAgendaTab=function(){
 // Dashboard HR: badge laporan = belum dibaca, badge Agenda & Broadcast = pengingat HR aktif bertanggal.
 renderHRDashboard=function(){
   v6ReconcileAllUsers();v4EnsureStores();initUsers();v9EnsureHrReminderStore();const c=document.getElementById('content'),leaders=state.allUsers.filter(u=>u.role==='leader'),forwarded=state.ideas.filter(i=>['Forwarded','HRReview'].includes(i.status)).length,unreadNotes=v8UnreadLeaderNotes().length,unreadReports=v9UnreadMonthlyReports().length,hrAgendaCount=v9HrAgendaBadgeCount(),k=v6Kpi(state.activeProfile.nik);const avgSla=leaders.length?Math.round(leaders.reduce((s,l)=>s+v6LeaderSlaStats(l.nik).score,0)/leaders.length):100;
-  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${v9Esc(state.activeProfile.nama)}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div>${hrAgendaCount?`<div class="hr-agenda-notice" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)" style="cursor:pointer"><span>🔔</span><span>${hrAgendaCount} pengingat Agenda HR aktif.</span><span class="count">${hrAgendaCount}</span></div>`:''}<div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${unreadReports?`<span class="notify">${unreadReports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, perusahaan, broadcast, kegiatan & pesan pribadi.</div>${hrAgendaCount?`<span class="notify">${hrAgendaCount}</span>`:''}</button></div>`;
+  c.innerHTML=`<div class="hr-kpi-card"><div style="font-size:10px;font-weight:800;color:#93c5fd">KPI DIGITAL HR • GAMIFIKASI</div><div style="font-size:17px;font-weight:800;margin-top:3px">${v9Esc(state.activeProfile.nama)}</div><div class="muted">Skor aplikasi mengukur proses yang tercatat digital. Kinerja lapangan belum termasuk.</div><div class="hr-kpi-grid"><div><strong>${state.activeProfile.xp||0}</strong><span>XP HR</span></div><div><strong>${k.score}</strong><span>Skor KPI</span></div><div><strong>${avgSla}%</strong><span>Avg SLA Leader</span></div></div></div>${hrAgendaCount?`<div class="hr-agenda-notice" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)" style="cursor:pointer"><span>🔔</span><span>${hrAgendaCount} pengingat Agenda HR aktif.</span><span class="count">${hrAgendaCount}</span></div>`:''}<div class="home-section-title">Pusat Kerja HR</div><div class="home-grid"><button class="home-tile" onclick="renderXpKoreksiV11()"><div class="icon">🛠️</div><div class="title">Koreksi XP</div><div class="desc">Ubah XP dengan audit.</div></button><button class="home-tile" onclick="showHRSection('akun')"><div class="icon">👥</div><div class="title">Kelola Pengguna</div><div class="desc">Akun & relasi tim.</div></button><button class="home-tile" onclick="switchTab('ide_halbaik_hr',true)"><div class="icon">💡</div><div class="title">Ide & Kontribusi</div><div class="desc">Reward bertingkat & keputusan.</div>${forwarded?`<span class="notify">${forwarded}</span>`:''}</button><button class="home-tile" onclick="renderHRLeaderNotesPage()"><div class="icon">📝</div><div class="title">Catatan Leader</div><div class="desc">Perbaikan anggota.</div>${unreadNotes?`<span class="notify">${unreadNotes}</span>`:''}</button><button class="home-tile" onclick="renderHRMonthlyReportsPage()"><div class="icon">📑</div><div class="title">Laporan Bulanan</div><div class="desc">Perkembangan tim.</div>${unreadReports?`<span class="notify">${unreadReports}</span>`:''}</button><button class="home-tile" onclick="state.agendaSubTab='hragenda';switchTab('agenda',true)"><div class="icon">📅</div><div class="title">Agenda & Broadcast</div><div class="desc">Agenda HR, perusahaan, broadcast, kegiatan & pesan pribadi.</div>${hrAgendaCount?`<span class="notify">${hrAgendaCount}</span>`:''}</button></div>`;
 };
 </script>
 
@@ -5052,4 +5052,177 @@ async function confirmHrisFullResetV1(){
   };
 })();
 </script>
+<script id="v11-update">
+/* V11 — Agenda multi-tanggal/edit/hapus + notifikasi agenda, pesan ke semua, Koreksi XP, roster L/SKT/CT bukan Alpha */
+(function(){
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const me=()=>state.activeProfile||{};
+  const isHR=()=>String(me().role||'').toLowerCase()==='hr';
+  const saveAgendas=()=>{try{localStorage.setItem('agendas_all',JSON.stringify(state.agendas));}catch(_){}};
 
+  /* ---- 2a. Form: tanggal kedua + daftar kelola (edit/hapus) ---- */
+  function enhanceAgendaForm(){
+    if(!isHR()) return;
+    const d1=document.getElementById('hrAgendaDate');
+    if(d1&&!document.getElementById('hrAgendaDate2')){
+      d1.insertAdjacentHTML('afterend','<label>Tanggal ke-2 (opsional, agenda yang sama)</label><input type="date" id="hrAgendaDate2"><div class="form-hint" style="font-size:10px;color:#64748b;margin-top:-4px">Isi bila agenda yang sama diadakan di dua tanggal berbeda. Setiap tanggal dikonfirmasi & diberi XP terpisah.</div>');
+    }
+    if(d1&&!document.getElementById('hrAgendaManageV11')){
+      const card=d1.closest('.card'); if(!card) return;
+      const wrap=document.createElement('div'); wrap.id='hrAgendaManageV11';
+      card.insertAdjacentElement('afterend',wrap); renderManage();
+    }
+  }
+  function renderManage(){
+    const w=document.getElementById('hrAgendaManageV11'); if(!w) return;
+    const list=(state.agendas||[]).filter(a=>(a.scope||'company')==='company').sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    w.innerHTML='<h2 class="section-title">Kelola Agenda Perusahaan</h2>'+(list.length?list.map(a=>`<div class="card"><div style="font-size:12px;font-weight:800">${esc(a.title)}</div><div style="font-size:10px;color:#64748b;margin:4px 0 8px">📅 ${esc(a.date)} • ⏰ ${esc(a.time)} • 📍 ${esc(a.location)} • ⭐ +${Number(a.xpBonus)||0} XP</div><div style="display:flex;gap:7px"><button class="btn secondary" style="margin:0;padding:8px 10px;font-size:10px" onclick="hrEditAgendaV11('${esc(a.id)}')">✏️ Edit</button><button class="btn danger" style="margin:0;padding:8px 10px;font-size:10px;background:#dc2626;color:#fff" onclick="hrDeleteAgendaV11('${esc(a.id)}')">🗑️ Hapus</button></div></div>`).join(''):'<div class="empty">Belum ada Agenda Perusahaan.</div>');
+  }
+  const prevSub=window.renderAgendaSubTabContent;
+  window.renderAgendaSubTabContent=function(){const r=prevSub.apply(this,arguments);try{enhanceAgendaForm();}catch(_){}return r;};
+
+  window.submitCreateAgendaByHR=async function(){
+    const v=id=>(document.getElementById(id)?.value||'').trim();
+    const title=v('hrAgendaTitle'),d1=v('hrAgendaDate'),d2=v('hrAgendaDate2');
+    const time=v('hrAgendaTime')||'09:00 WIB',location=v('hrAgendaLoc')||'Kantor Pusat',xpBonus=parseInt(v('hrAgendaXp'))||50;
+    if(!title||!d1){showToast('⚠️ Judul agenda dan tanggal wajib diisi!');return;}
+    const dates=[...new Set([d1,d2].filter(Boolean))];
+    if(!GAS_URL){showToast('Koneksi server diperlukan.');return;}
+    showToast('⏳ Menyimpan agenda…');
+    const baseId=Date.now();
+    const res=await gasCall('addAgenda',{id:baseId,title,dates,time,location,xpBonus,scope:'company',createdBy:me().nik});
+    if(!res||res.ok!==true){showToast('❌ Agenda gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}
+    (res.items||[]).slice().reverse().forEach(it=>{state.agendas.unshift({id:Number(it.id),title:it.title,date:it.date,time:it.time,location:it.location,xpBonus:Number(it.xp_bonus)||0,hrXpBonus:0,scope:'company',teamLeaderNik:'',creatorNik:String(me().nik)});});
+    saveAgendas();
+    showToast('🎉 '+(res.items?.length||1)+' Agenda Perusahaan berhasil dibuat & diberitahukan ke anggota/Leader.');
+    renderAgendaTab();
+  };
+
+  /* ---- 2b. Edit & hapus ---- */
+  window.hrEditAgendaV11=function(id){
+    const a=(state.agendas||[]).find(x=>String(x.id)===String(id)); if(!a) return;
+    document.getElementById('agendaEditOverlayV11')?.remove();
+    const o=document.createElement('div'); o.id='agendaEditOverlayV11';
+    o.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    o.innerHTML=`<div class="card" style="width:100%;max-width:420px;max-height:90vh;overflow:auto"><div style="font-weight:800;margin-bottom:8px">✏️ Edit Agenda</div><label>Judul</label><input id="eaTitle" value="${esc(a.title)}"><label>Tanggal</label><input type="date" id="eaDate" value="${esc(a.date)}"><label>Waktu</label><input id="eaTime" value="${esc(a.time)}"><label>Lokasi</label><input id="eaLoc" value="${esc(a.location)}"><label>Bonus XP (berlaku untuk konfirmasi berikutnya)</label><input type="number" id="eaXp" min="0" step="10" value="${Number(a.xpBonus)||0}"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn secondary" style="margin:0" onclick="document.getElementById('agendaEditOverlayV11').remove()">Batal</button><button class="btn" style="margin:0" id="eaSave" onclick="hrSaveAgendaV11('${esc(a.id)}')">Simpan</button></div></div>`;
+    document.body.appendChild(o);
+  };
+  window.hrSaveAgendaV11=async function(id){
+    const g=i=>document.getElementById(i)?.value.trim()||'';
+    const title=g('eaTitle'),date=g('eaDate'),time=g('eaTime'),location=g('eaLoc'),xpBonus=Number(g('eaXp'))||0;
+    if(!title||!date){showToast('⚠️ Judul dan tanggal wajib diisi.');return;}
+    const btn=document.getElementById('eaSave'); if(btn)btn.disabled=true;
+    const res=await gasCall('updateAgenda',{id:String(id),title,date,time,location,xpBonus});
+    if(!res||res.ok!==true){showToast('❌ '+(res?.message||res?.error||'Gagal menyimpan.'));if(btn)btn.disabled=false;return;}
+    const a=state.agendas.find(x=>String(x.id)===String(id)); if(a)Object.assign(a,{title,date,time,location,xpBonus});
+    saveAgendas(); document.getElementById('agendaEditOverlayV11')?.remove(); showToast('✅ Agenda diperbarui.'); renderAgendaTab();
+  };
+  window.hrDeleteAgendaV11=async function(id){
+    const a=(state.agendas||[]).find(x=>String(x.id)===String(id)); if(!a) return;
+    if(!confirm('Hapus agenda "'+a.title+'" ('+a.date+')?\nKonfirmasi kehadiran agenda ini ikut terhapus. XP yang sudah diberikan tidak ditarik.')) return;
+    const res=await gasCall('deleteAgenda',{id:String(id)});
+    if(!res||res.ok!==true){showToast('❌ '+(res?.message||res?.error||'Gagal menghapus.'));return;}
+    state.agendas=state.agendas.filter(x=>String(x.id)!==String(id)); saveAgendas();
+    try{const st=JSON.parse(localStorage.getItem('agenda_user_status_all')||'{}');Object.keys(st).forEach(k=>{if(k.startsWith(String(id)+'_'))delete st[k];});localStorage.setItem('agenda_user_status_all',JSON.stringify(st));state.agendaUserStatus=st;}catch(_){}
+    showToast('🗑️ Agenda dihapus.'); renderAgendaTab();
+  };
+
+  /* ---- 2c. Notifikasi agenda baru (anggota & Leader) ---- */
+  const SEEN_KEY=()=>'agenda_seen_v11_'+(me().nik||'');
+  function seenSet(){try{return new Set(JSON.parse(localStorage.getItem(SEEN_KEY())||'null')||[]);}catch(_){return new Set();}}
+  function unseenAgendas(){
+    if(!me().nik||isHR()) return [];
+    const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'}), seen=seenSet();
+    return (state.agendas||[]).filter(a=>(a.scope||'company')==='company'&&String(a.date)>=today&&!seen.has(String(a.id)));
+  }
+  function markSeen(){try{const s=seenSet();(state.agendas||[]).forEach(a=>s.add(String(a.id)));localStorage.setItem(SEEN_KEY(),JSON.stringify([...s]));}catch(_){}}
+  function injectBanner(){
+    const c=document.getElementById('content'); if(!c||!c.querySelector('.home-hero')||c.querySelector('#agendaBannerV11')) return;
+    const list=unseenAgendas(); if(!list.length) return;
+    const b=document.createElement('div'); b.id='agendaBannerV11'; b.className='card';
+    b.style.cssText='background:#fef3c7;border-color:#fcd34d;cursor:pointer';
+    b.innerHTML=`<div style="font-weight:800;font-size:12px;color:#92400e">🔔 ${list.length} Agenda Perusahaan baru dari HR</div><div style="font-size:10.5px;color:#78350f;margin-top:4px">${list.slice(0,3).map(a=>esc(a.title)+' ('+esc(a.date)+')').join(' • ')}${list.length>3?' …':''}</div><div style="font-size:10px;color:#b45309;margin-top:4px">Ketuk untuk melihat & konfirmasi kehadiran.</div>`;
+    b.onclick=()=>{markSeen();b.remove();try{switchTab('agenda',true);}catch(_){}};
+    c.insertBefore(b,c.querySelector('.home-hero').nextSibling);
+  }
+  const obs=new MutationObserver(()=>{try{injectBanner();}catch(_){}});
+  document.addEventListener('DOMContentLoaded',()=>{const c=document.getElementById('content');if(c)obs.observe(c,{childList:true});});
+  if(document.readyState!=='loading'){const c=document.getElementById('content');if(c)obs.observe(c,{childList:true});}
+  const prevMap=window.mapBootstrapToCaches;
+  window.mapBootstrapToCaches=function(bs){
+    const first=!localStorage.getItem(SEEN_KEY());
+    const r=prevMap.apply(this,arguments);
+    try{
+      const saved=JSON.parse(localStorage.getItem('agendas_all')||'[]'); if(Array.isArray(saved))state.agendas=saved;
+      if(first&&me().nik){markSeen();} // pertama kali di perangkat ini: jangan banjiri notifikasi lama
+      else{const n=unseenAgendas().length;if(n)showToast('🔔 '+n+' Agenda Perusahaan baru dari HR.');}
+      injectBanner();
+    }catch(_){}
+    return r;
+  };
+  const prevSub2=window.renderAgendaSubTabContent;
+  window.renderAgendaSubTabContent=function(){const r=prevSub2.apply(this,arguments);if(!isHR())markSeen();return r;};
+
+  /* ---- 3. Pesan ke semua: kirim flag toAll bila semua penerima terpilih ---- */
+  window.sendHRPrivateMessageBulkV1=async function(){
+    const all=[...document.querySelectorAll('#hrRecipientList .hr-recipient-check')],checked=all.filter(x=>x.checked),toNiks=checked.map(x=>x.value);
+    const subject=document.getElementById('msgSubject').value.trim(),text=document.getElementById('msgText').value.trim(),xpBonus=Number(document.getElementById('msgXpBonus').value)||0;
+    if(!toNiks.length){showToast('Pilih minimal satu penerima.');return;}
+    if(!text){showToast('Isi pesan terlebih dahulu.');return;}
+    const toAll=all.length>0&&checked.length===all.length;
+    if(!confirm(toAll?'Kirim pesan ini ke SEMUA karyawan & Leader aktif ('+checked.length+' orang)?':'Kirim pesan ini kepada '+toNiks.length+' karyawan?'))return;
+    if(!GAS_URL){showToast('Koneksi server diperlukan agar pesan terkirim ke akun karyawan.');return;}
+    showToast('⏳ Mengirim pesan…');
+    const res=await gasCall('sendBulkPrivateMessage',toAll?{toAll:true,subject,text,xpBonus}:{toNiks,subject,text,xpBonus});
+    if(!res?.ok){showToast('❌ Pesan gagal dikirim: '+(res?.message||res?.error||'coba lagi'));return;}
+    showToast('✅ Pesan berhasil dikirim ke '+res.count+' penerima.');
+    try{(res.recipients||[]).forEach(r=>state.privateMessages.unshift({id:r.id,fromNik:String(me().nik),toNik:r.toNik,toName:r.toName,subject:subject||'Pesan Penting dari HR',text,xpBonus,date:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'})}));}catch(_){}
+    renderHRMessagesPage();
+  };
+
+  /* ---- 5. Koreksi XP (HR) ---- */
+  window.renderXpKoreksiV11=async function(){
+    if(!isHR()) return;
+    initUsers();
+    const c=document.getElementById('content'),users=state.allUsers.filter(u=>u.role!=='hr'&&u.active!==false).sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+    c.innerHTML=`<div class="v4-section-head"><strong>🛠️ Koreksi XP</strong></div><div class="card"><div style="font-size:10.5px;color:#64748b;margin-bottom:8px">Gunakan fitur ini (bukan edit manual spreadsheet) agar total XP, riwayat & audit tetap konsisten. Setiap koreksi tercatat di sheet XPAdjustments dan AuditLog.</div><label>Karyawan / Leader</label><select id="xkUser" onchange="xkShowCurrentV11()">${users.map(u=>`<option value="${esc(u.nik)}">${esc(u.nama)} — ${esc(roleLabel(u.role))}</option>`).join('')}</select><div id="xkCurrent" style="font-size:11px;font-weight:700;margin:4px 0 8px"></div><label>Perubahan XP (+ menambah, − mengurangi, maks ±1000)</label><input type="number" id="xkDelta" step="1" placeholder="cth. 50 atau -30"><label>Alasan (wajib)</label><textarea id="xkReason" rows="3" placeholder="cth. Koreksi XP agenda 12 Nov yang salah hitung"></textarea><button class="btn" id="xkBtn" onclick="xkSubmitV11()">💾 Simpan Koreksi</button></div><h2 class="section-title">Riwayat Koreksi XP</h2><div id="xkHistory"><div class="muted">⏳ Memuat…</div></div>`;
+    xkShowCurrentV11(); xkLoadHistoryV11();
+  };
+  window.xkShowCurrentV11=function(){const n=document.getElementById('xkUser')?.value;const u=state.allUsers.find(x=>String(x.nik)===String(n));const el=document.getElementById('xkCurrent');if(el)el.textContent=u?('XP saat ini: '+(u.xp||0)):'';};
+  window.xkLoadHistoryV11=async function(){
+    const el=document.getElementById('xkHistory'); if(!el) return;
+    const res=await gasCall('getXpAdjustments',{});
+    if(!res?.ok){el.innerHTML='<div class="empty">Riwayat tidak dapat dimuat.</div>';return;}
+    const rows=res.adjustments||[];
+    el.innerHTML=rows.length?rows.map(r=>`<div class="card"><div style="font-size:12px;font-weight:800">${esc(r.nama)} <span style="color:${Number(r.delta)>=0?'#059669':'#dc2626'}">${Number(r.delta)>0?'+':''}${esc(r.delta)} XP</span></div><div style="font-size:10px;color:#64748b;margin-top:3px">${esc(r.xp_before)} → ${esc(r.xp_after)} • ${esc(String(r.created_at).slice(0,16).replace('T',' '))}</div><div style="font-size:10.5px;margin-top:4px">${esc(r.reason)}</div></div>`).join(''):'<div class="empty">Belum ada koreksi XP.</div>';
+  };
+  window.xkSubmitV11=async function(){
+    const nik=document.getElementById('xkUser')?.value,delta=Math.round(Number(document.getElementById('xkDelta')?.value)),reason=(document.getElementById('xkReason')?.value||'').trim();
+    if(!nik||!delta){showToast('⚠️ Pilih pengguna dan isi nilai koreksi (tidak boleh 0).');return;}
+    if(Math.abs(delta)>1000){showToast('⚠️ Maksimal ±1000 per koreksi.');return;}
+    if(reason.length<5){showToast('⚠️ Alasan wajib diisi (min. 5 karakter).');return;}
+    if(!confirm('Terapkan koreksi '+(delta>0?'+':'')+delta+' XP?'))return;
+    const btn=document.getElementById('xkBtn'); if(btn)btn.disabled=true;
+    const res=await gasCall('adjustXp',{id:'XPADJ-'+Date.now()+'-'+nik,nik,delta,reason});
+    if(btn)btn.disabled=false;
+    if(!res?.ok){showToast('❌ '+(res?.message||res?.error||'Koreksi gagal.'));return;}
+    const u=state.allUsers.find(x=>String(x.nik)===String(nik)); if(u&&res.user){u.xp=res.user.xp;try{localStorage.setItem('registered_users',JSON.stringify(state.allUsers));}catch(_){}}
+    showToast('✅ Koreksi XP tersimpan. XP baru: '+(res.user?.xp??'-'));
+    document.getElementById('xkDelta').value='';document.getElementById('xkReason').value='';xkShowCurrentV11();xkLoadHistoryV11();
+  };
+
+  /* ---- 6. Roster L / SKT / CT tidak pernah Alpha di sisi klien ---- */
+  // Server (dailyMaintenance + roster eksternal) adalah satu-satunya penentu Alpha. Hitung lokal lama mengabaikan roster.
+  const prevReconcile=window.v6ReconcileAbsenceForUser;
+  window.v6ReconcileAbsenceForUser=function(user,lb){ if(typeof GAS_URL!=='undefined'&&GAS_URL) return; return prevReconcile.apply(this,arguments); };
+  const prevStats=window.v6PenaltyStats;
+  window.v6PenaltyStats=function(nik){
+    if(!(typeof GAS_URL!=='undefined'&&GAS_URL)) return prevStats.apply(this,arguments);
+    let recs=[];try{recs=JSON.parse(localStorage.getItem('records_'+nik)||'[]');}catch(_){}
+    const rows=recs.filter(r=>['Alpha','Tidak Absen Pulang'].includes(String(r.statusText||'')));
+    const alpha=rows.filter(r=>r.statusText==='Alpha').length,missingCheckout=rows.length-alpha;
+    return {alpha,missingCheckout,xpLost:Math.abs(rows.reduce((s,r)=>s+(Number(r.xpEarned)||0),0)),rows:rows.map(r=>({date:r.date,type:r.statusText,xpDelta:r.xpEarned,reason:'Ditetapkan server berdasarkan roster.'}))};
+  };
+  try{localStorage.removeItem('attendance_penalties_v6');}catch(_){} // bersihkan Alpha lokal lama yang salah (L/SKT/CT)
+})();
+</script>
