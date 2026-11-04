@@ -5297,7 +5297,7 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
   const GROUPS=[
     ['act','Tindakan harian',['Pemeriksaan Absensi','Koreksi XP','Kehadiran Saya','Tinjau Koreksi Absensi'],true],
     ['team','Tim & Kinerja',['Ide & Kontribusi','Catatan Leader','Laporan Bulanan','Detail Performa','Skor & Penyebab'],false],
-    ['comm','Komunikasi',['Pesan Pribadi'],false],
+    ['comm','Komunikasi',['Pesan Pribadi','Pesan Anonim'],false],
     ['adm','Administrasi',['Kelola Pengguna','Menu Reset Data'],false]
   ];
   const SV=p=>`<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -5315,13 +5315,14 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
     reset:SV('<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>'),
     bolt:SV('<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>'),
     gear:SV('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+    lock:SV('<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
     dot:SV('<circle cx="12" cy="12" r="4"/>')
   };
   const GR={blue:'linear-gradient(135deg,#2563eb,#06b6d4)',violet:'linear-gradient(135deg,#7c3aed,#ec4899)',green:'linear-gradient(135deg,#059669,#34d399)',slate:'linear-gradient(135deg,#475569,#0f172a)',amber:'linear-gradient(135deg,#f59e0b,#f97316)',red:'linear-gradient(135deg,#dc2626,#f97316)',teal:'linear-gradient(135deg,#0d9488,#22d3ee)',indigo:'linear-gradient(135deg,#4f46e5,#818cf8)'};
   const TILE_ICON={'Pemeriksaan Absensi':['clip','amber'],'Koreksi XP':['sliders','indigo'],'Kehadiran Saya':['cal','teal'],'Tinjau Koreksi Absensi':['note','amber'],
     'Ide & Kontribusi':['bulb','amber'],'Catatan Leader':['note','violet'],'Laporan Bulanan':['doc','indigo'],'Detail Performa':['bars','blue'],'Skor & Penyebab':['trend','teal'],
-    'Pesan Pribadi':['msg','green'],'Kelola Pengguna':['users','blue'],'Menu Reset Data':['reset','red']};
-  const GROUP_META={act:['bolt','blue','Absensi, XP & kehadiran'],team:['users','violet','Ide, catatan & performa tim'],comm:['msg','green','Kirim pesan ke karyawan'],adm:['gear','slate','Pengguna & reset data'],other:['dot','slate','Menu tambahan']};
+    'Pesan Pribadi':['msg','green'],'Pesan Anonim':['lock','violet'],'Kelola Pengguna':['users','blue'],'Menu Reset Data':['reset','red']};
+  const GROUP_META={act:['bolt','blue','Absensi, XP & kehadiran'],team:['users','violet','Ide, catatan & performa tim'],comm:['msg','green','Pesan pribadi & anonim'],adm:['gear','slate','Pengguna & reset data'],other:['dot','slate','Menu tambahan']};
   const HIDDEN_TILES=['Agenda & Broadcast']; // sudah ada di menu bawah "Agenda"
   window.__v12Tiles=window.__v12Tiles||{};
   const loadOpen=()=>{try{return JSON.parse(localStorage.getItem('v12_hr_groups')||'{}');}catch(_){return {};}};
@@ -5347,6 +5348,12 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
       const b=document.createElement('button'); b.className='home-tile';
       b.innerHTML='<div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim pesan ke satu, beberapa, atau semua karyawan.</div>';
       b.onclick=()=>renderHRMessagesPage(); tiles.push(b);
+    }
+    if(!tiles.some(t=>titleOf(t)==='Pesan Anonim')){
+      const b=document.createElement('button'); b.className='home-tile';
+      const un=(cache.anonHrList?.data?.threads||[]).filter(x=>x.unread_hr).length;
+      b.innerHTML='<div class="icon">🔒</div><div class="title">Pesan Anonim</div><div class="desc">Curhat dari karyawan & Leader. Pengirim tidak diketahui.</div>'+(un?`<span class="notify">${un}</span>`:'');
+      b.onclick=()=>renderAnonInboxV13(); tiles.push(b);
     }
     tiles.forEach(t=>{
       if(!t.getAttribute('onclick')&&typeof t.onclick==='function'){
@@ -5381,7 +5388,7 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
     anchor.parentNode.insertBefore(wrap,anchor);
     oldTitles.forEach(p=>p.remove()); grids.forEach(g=>g.remove());
     // Pemanasan: muat antrean kegiatan di latar belakang agar menu Agenda → Kegiatan langsung tampil.
-    try{if(GAS_URL&&sessionStorage.getItem('ag_session_token')){gasCall('getPendingActivities',{});gasCall('getPendingAttendanceReviews',{});}}catch(_){}
+    try{if(GAS_URL&&sessionStorage.getItem('ag_session_token')){gasCall('getPendingActivities',{});gasCall('getPendingAttendanceReviews',{});gasCall('anonHrList',{});}}catch(_){}
   }
   const prevDash=window.renderHRDashboard;
   window.renderHRDashboard=function(){const r=prevDash.apply(this,arguments);try{if(isHR())regroupHome();}catch(e){console.warn('v12 regroup',e);}return r;};
@@ -5407,8 +5414,9 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
 
   /* ===== Percepatan: antrean HR (cache singkat + perbarui di latar) ===== */
   const CACHED={getPendingActivities:()=>{if(typeof refreshHrPendingActivities==='function')refreshHrPendingActivities();},
-                getPendingAttendanceReviews:()=>{if(document.getElementById('nrv12'))window.renderNightAttendanceReviewsV1();}};
-  const INVALIDATE={reviewActivity:'getPendingActivities',cancelActivity:'getPendingActivities',addActivity:'getPendingActivities',resolveAttendanceReview:'getPendingAttendanceReviews'};
+                getPendingAttendanceReviews:()=>{if(document.getElementById('nrv12'))window.renderNightAttendanceReviewsV1();},
+                anonHrList:()=>{if(typeof window.anonRefreshV13==='function')window.anonRefreshV13();}};
+  const INVALIDATE={reviewActivity:'getPendingActivities',cancelActivity:'getPendingActivities',addActivity:'getPendingActivities',resolveAttendanceReview:'getPendingAttendanceReviews',anonHrReply:'anonHrList',anonHrStatus:'anonHrList',anonHrDelete:'anonHrList'};
   const cache={},busy={}; 
   const ck=a=>'v12_cache_'+a;
   Object.keys(CACHED).forEach(a=>{try{cache[a]=JSON.parse(sessionStorage.getItem(ck(a))||'null');}catch(_){}});
@@ -5499,6 +5507,204 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
       const c=document.getElementById('agendaSubTabContent'); if(c){try{renderHRAgenda(c);return;}catch(e){console.warn('v12 agenda',e);}}
     }
     return prevSub.apply(this,arguments);
+  };
+})();
+</script>
+<style id="v13-style">
+.an13-note{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:11px 12px;font-size:11px;line-height:1.55;color:#4c1d95;margin-bottom:10px}
+.an13-note b{color:#3b0764}
+.an13-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.an13-card textarea,.an13-form textarea{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:10px;padding:10px;font-size:12px;font-family:inherit;resize:vertical}
+.an13-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.an13-chip{font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:99px;background:#f1f5f9;color:#475569;white-space:nowrap}
+.an13-chip.Baru{background:#fee2e2;color:#b91c1c}.an13-chip.Diproses{background:#fef3c7;color:#92400e}.an13-chip.Selesai{background:#dcfce7;color:#166534}
+.an13-chip.cat{background:#ede9fe;color:#5b21b6}
+.an13-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block}
+.an13-meta{font-size:10px;color:#64748b}
+.an13-bub{max-width:86%;padding:8px 10px;border-radius:12px;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
+.an13-bub.user{background:#ede9fe;color:#2e1065;margin-left:auto;border-bottom-right-radius:3px}
+.an13-bub.hr{background:#e0f2fe;color:#0c4a6e;margin-right:auto;border-bottom-left-radius:3px}
+.an13-bub small{display:block;font-size:9px;opacity:.65;margin-top:3px}
+.an13-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.an13-btns button{margin:0;padding:8px 11px;font-size:10.5px;width:auto}
+.an13-filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.an13-filter button{border:1px solid #e2e8f0;background:#fff;border-radius:99px;padding:5px 11px;font-size:10.5px;font-weight:700;color:#475569}
+.an13-filter button.on{background:#4f46e5;border-color:#4f46e5;color:#fff}
+.an13-code{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;background:#f8fafc;border:1px dashed #94a3b8;border-radius:8px;padding:8px 10px;word-break:break-all;margin-top:6px}
+details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-webkit-details-marker{display:none}
+</style>
+<script id="v13-anon">
+/* V13 — Pesan anonim Karyawan/Leader → HR (tanpa token login; identitas pengirim tidak pernah dikirim ke server) */
+(function(){
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const role=()=>String(state.activeProfile?.role||'').toLowerCase();
+  const fmt=iso=>{try{return new Date(iso).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(_){return String(iso||'');}};
+  const CATS=['Curhat','Saran','Keluhan','Pertanyaan','Lainnya'];
+  const head=(t)=>`<div class="v4-section-head"><strong>${t}</strong><button class="v4-back" onclick="appBack()">← Beranda</button></div>`;
+
+  /* ---------- panggilan tanpa token ---------- */
+  async function anonCall(action,payload){
+    if(!GAS_URL) return {ok:false,message:'Koneksi server belum tersedia.'};
+    const ctrl=new AbortController(),to=setTimeout(()=>ctrl.abort(),20000);
+    try{const res=await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,payload}),signal:ctrl.signal});return await res.json();}
+    catch(e){return {ok:false,message:e.name==='AbortError'?'Server terlalu lama merespons. Coba lagi.':'Tidak bisa menghubungi server.'};}
+    finally{clearTimeout(to);}
+  }
+  async function getPass(force){
+    try{const p=sessionStorage.getItem('anon_pass_v13'),t=Number(sessionStorage.getItem('anon_pass_t'))||0;if(p&&!force&&Date.now()-t<6*3600e3)return p;}catch(_){}
+    const r=await gasCall('anonPass',{});
+    if(r?.ok){try{sessionStorage.setItem('anon_pass_v13',r.pass);sessionStorage.setItem('anon_pass_t',String(Date.now()));}catch(_){}return r.pass;}
+    return null;
+  }
+  async function anonWithPass(action,payload){
+    let pass=await getPass(false); if(!pass) return {ok:false,message:'Sesi login berakhir. Silakan login ulang.'};
+    let res=await anonCall(action,{...payload,pass});
+    if(res&&res.error==='ANON_PASS'){pass=await getPass(true);if(pass)res=await anonCall(action,{...payload,pass});}
+    return res;
+  }
+
+  /* ---------- penyimpanan kode di perangkat (tidak pernah dikirim bersama identitas) ---------- */
+  const LKEY=()=>'anon_tickets_v13_'+(state.activeProfile?.nik||'');
+  const loadT=()=>{try{return JSON.parse(localStorage.getItem(LKEY())||'[]');}catch(_){return [];}};
+  const saveT=a=>{try{localStorage.setItem(LKEY(),JSON.stringify(a));}catch(_){}};
+  window.__anonStatus=window.__anonStatus||{};
+  const unreadCount=()=>loadT().filter(t=>window.__anonStatus[t.ticket]?.unread_user).length;
+
+  async function pollMine(){
+    const items=loadT().map(t=>({ticket:t.ticket,key:t.key})); if(!items.length) return;
+    const r=await anonCall('anonPoll',{items}); if(!r?.ok) return;
+    r.items.forEach(i=>{window.__anonStatus[i.ticket]=i;});
+    const gone=r.items.filter(i=>i.gone).map(i=>i.ticket); // dihapus HR → bersihkan dari perangkat
+    if(gone.length) saveT(loadT().filter(t=>!gone.includes(t.ticket)));
+    updateTileBadge();
+  }
+
+  /* ---------- tile di Beranda Karyawan & Leader ---------- */
+  function updateTileBadge(){
+    const t=document.querySelector('[data-anon-v13]'); if(!t) return;
+    let b=t.querySelector('.notify'); const n=unreadCount();
+    if(n){ if(!b){b=document.createElement('span');b.className='notify';t.appendChild(b);} b.textContent=n; } else if(b) b.remove();
+  }
+  let lastPoll=0;
+  function injectTile(){
+    if(!['karyawan','leader'].includes(role())) return;
+    const c=document.getElementById('content'); if(!c||c.querySelector('[data-anon-v13]')) return;
+    const grid=c.querySelector('.home-grid'); if(!grid||!c.querySelector('.home-hero,.hr-kpi-card')) return;
+    const b=document.createElement('button'); b.className='home-tile'; b.dataset.anonV13='1';
+    b.setAttribute('onclick','renderAnonHomeV13()');
+    b.innerHTML='<div class="icon">🕊️</div><div class="title">Curhat Anonim ke HR</div><div class="desc">Tanpa nama. Hanya HR yang membaca.</div>';
+    grid.appendChild(b); updateTileBadge();
+    if(Date.now()-lastPoll>60000){lastPoll=Date.now();pollMine();}
+  }
+  new MutationObserver(()=>{try{injectTile();}catch(_){}}).observe(document.getElementById('content'),{childList:true});
+
+  /* ---------- halaman Karyawan/Leader ---------- */
+  window.renderAnonHomeV13=function(){
+    const c=document.getElementById('content'); if(!c) return;
+    const list=loadT().sort((a,b)=>String(b.created).localeCompare(String(a.created)));
+    c.innerHTML=head('🕊️ Curhat Anonim ke HR')+
+    `<div class="an13-note">🔒 <b>Tanpa nama.</b> Pesan dikirim tanpa NIK atau nama Anda, dan sistem tidak menyimpan identitas pengirim. Hanya HR Admin yang dapat membacanya. Silakan bercerita tentang pekerjaan maupun hal pribadi.<br><br>Setelah terkirim, Anda mendapat <b>kode percakapan</b>. Hanya dengan kode itu balasan HR dapat dibaca, jadi simpan baik-baik. <span style="opacity:.8">Ini bukan layanan darurat; bila Anda atau orang lain dalam bahaya, segera hubungi layanan darurat setempat.</span></div>
+    <div class="an13-card an13-form"><label>Kategori</label><select id="anCat">${CATS.map(x=>`<option>${x}</option>`).join('')}</select><label>Pesan</label><textarea id="anText" rows="5" maxlength="3000" placeholder="Tulis apa saja yang ingin Anda sampaikan…" oninput="document.getElementById('anCount').textContent=this.value.length"></textarea><div class="an13-meta" style="text-align:right"><span id="anCount">0</span>/3000</div><button class="btn" id="anSend" onclick="anonSendV13()">🕊️ Kirim Anonim</button></div>
+    <h2 class="section-title">Percakapan Saya</h2><div id="anList">${list.length?list.map(t=>rowHtml(t)).join(''):'<div class="empty">Belum ada percakapan di perangkat ini.</div>'}</div>
+    <details class="an13-card" style="margin-top:8px"><summary style="font-size:11px;font-weight:700;cursor:pointer">Punya kode dari perangkat lain?</summary><input id="anCode" placeholder="Tempel kode percakapan (TIKET-KUNCI)" style="margin-top:8px"><button class="btn secondary" style="margin:6px 0 0" onclick="anonRestoreV13()">Pulihkan percakapan</button></details>`;
+    pollMine().then(()=>{const l=document.getElementById('anList');if(l){const cur=loadT().sort((a,b)=>String(b.created).localeCompare(String(a.created)));l.innerHTML=cur.length?cur.map(rowHtml).join(''):'<div class="empty">Belum ada percakapan di perangkat ini.</div>';}});
+  };
+  function rowHtml(t){
+    const st=window.__anonStatus[t.ticket]||{};
+    return `<div class="an13-card" onclick="renderAnonThreadV13('${esc(t.ticket)}')" style="cursor:pointer"><div class="an13-row"><span class="an13-chip cat">${esc(t.category||'Curhat')}</span>${st.status?`<span class="an13-chip ${esc(st.status)}">${esc(st.status)}</span>`:''}${st.unread_user?'<span class="an13-dot"></span><span class="an13-meta" style="color:#b91c1c;font-weight:700">Balasan baru</span>':''}<span class="an13-meta" style="margin-left:auto">${esc(fmt(t.created))}</span></div><div class="an13-meta" style="margin-top:6px">Kode: ${esc(t.ticket)}</div></div>`;
+  }
+  window.anonSendV13=async function(){
+    const text=(document.getElementById('anText')?.value||'').trim(),category=document.getElementById('anCat')?.value||'Curhat';
+    if(!text){showToast('⚠️ Tulis pesan terlebih dahulu.');return;}
+    const btn=document.getElementById('anSend'); if(btn){btn.disabled=true;btn.textContent='⏳ Mengirim…';}
+    const res=await anonWithPass('anonSend',{text,category});
+    if(btn){btn.disabled=false;btn.textContent='🕊️ Kirim Anonim';}
+    if(!res?.ok){showToast('❌ '+(res?.message||'Gagal mengirim. Coba lagi.'));return;}
+    const arr=loadT(); arr.push({ticket:res.ticket,key:res.key,category:res.category,created:res.created_at}); saveT(arr);
+    showToast('✅ Pesan terkirim secara anonim.');
+    renderAnonThreadV13(res.ticket,true);
+  };
+  window.anonRestoreV13=async function(){
+    const raw=(document.getElementById('anCode')?.value||'').trim(),[ticket,key]=raw.split('-');
+    if(!ticket||!key){showToast('⚠️ Format kode: TIKET-KUNCI');return;}
+    const r=await anonCall('anonRead',{ticket,key}); if(!r?.ok){showToast('❌ '+(r?.message||'Kode tidak cocok.'));return;}
+    const arr=loadT(); if(!arr.some(t=>t.ticket===ticket)){arr.push({ticket,key,category:r.thread.category,created:r.thread.created_at});saveT(arr);}
+    showToast('✅ Percakapan dipulihkan.'); renderAnonHomeV13();
+  };
+  window.renderAnonThreadV13=async function(ticket,justSent){
+    const c=document.getElementById('content'),rec=loadT().find(t=>t.ticket===ticket); if(!c||!rec) return;
+    c.innerHTML=head('🕊️ Percakapan Anonim')+'<div class="an13-meta" style="margin:6px 2px">⏳ Memuat…</div>';
+    const r=await anonCall('anonRead',{ticket,key:rec.key});
+    if(!r?.ok){c.innerHTML=head('🕊️ Percakapan Anonim')+`<div class="an13-card">${esc(r?.message||'Gagal memuat.')}</div>`;return;}
+    const th=r.thread; window.__anonStatus[ticket]={...(window.__anonStatus[ticket]||{}),status:th.status,unread_user:false}; updateTileBadge();
+    c.innerHTML=head('🕊️ Percakapan Anonim')+
+    `<div class="an13-card"><div class="an13-row"><span class="an13-chip cat">${esc(th.category)}</span><span class="an13-chip ${esc(th.status)}">${esc(th.status)}</span></div>
+      <div class="an13-meta" style="margin-top:8px">Kode percakapan Anda (simpan untuk membuka balasan di perangkat lain):</div><div class="an13-code" id="anCodeShow">${esc(ticket)}-${esc(rec.key)}</div>
+      <div class="an13-btns"><button class="btn secondary" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('anCodeShow').textContent).then(()=>showToast('Kode disalin'))">📋 Salin kode</button></div>${justSent?'<div class="an13-meta" style="margin-top:8px">Terkirim. HR akan membalas di sini; buka kembali halaman ini untuk melihat balasan.</div>':''}</div>
+     <div id="anMsgs">${th.messages.map(m=>`<div class="an13-bub ${m.from==='hr'?'hr':'user'}">${esc(m.text)}<small>${m.from==='hr'?'HR':'Anda'} · ${esc(fmt(m.at))}</small></div>`).join('')}</div>
+     <div class="an13-card an13-form"><textarea id="anReply" rows="3" maxlength="3000" placeholder="Tulis balasan…"></textarea><button class="btn" id="anReplyBtn" onclick="anonReplyV13('${esc(ticket)}')">Kirim</button></div>
+     <button class="btn secondary" style="margin-top:6px" onclick="anonForgetV13('${esc(ticket)}')">Hapus dari perangkat ini</button>`;
+  };
+  window.anonReplyV13=async function(ticket){
+    const rec=loadT().find(t=>t.ticket===ticket),text=(document.getElementById('anReply')?.value||'').trim(); if(!rec) return;
+    if(!text){showToast('⚠️ Tulis balasan terlebih dahulu.');return;}
+    const b=document.getElementById('anReplyBtn'); if(b)b.disabled=true;
+    const r=await anonWithPass('anonUserReply',{ticket,key:rec.key,text}); if(b)b.disabled=false;
+    if(!r?.ok){showToast('❌ '+(r?.message||'Gagal mengirim.'));return;}
+    renderAnonThreadV13(ticket);
+  };
+  window.anonForgetV13=function(ticket){
+    if(!confirm('Hapus percakapan ini dari perangkat? Tanpa kode percakapan, balasan HR tidak dapat dibuka lagi.'))return;
+    saveT(loadT().filter(t=>t.ticket!==ticket)); renderAnonHomeV13();
+  };
+
+  /* ---------- Kotak masuk HR ---------- */
+  let filter='Semua',openTicket=null;
+  window.renderAnonInboxV13=async function(){
+    if(role()!=='hr') return;
+    const c=document.getElementById('content'); if(!c) return;
+    if(!document.getElementById('anonInboxV13')) c.innerHTML=head('🔒 Pesan Anonim')+'<div id="anonInboxV13"><div class="an13-meta" style="margin:6px 2px">⏳ Memuat…</div></div>';
+    const token=window.__hrisNavSeq||0;
+    const res=await gasCall('anonHrList',{});
+    if(token!==(window.__hrisNavSeq||0)||!document.getElementById('anonInboxV13')) return;
+    if(!res?.ok){document.getElementById('anonInboxV13').innerHTML=`<div class="an13-card">Gagal memuat: ${esc(res?.message||res?.error||'Kesalahan koneksi')}<div class="an13-btns"><button class="btn secondary" onclick="renderAnonInboxV13()">Coba lagi</button></div></div>`;return;}
+    draw(res.threads||[]);
+  };
+  window.anonRefreshV13=function(){ // dipanggil saat data di latar belakang berubah; jangan timpa balasan yang sedang diketik
+    const box=document.getElementById('anonInboxV13'); if(!box) return;
+    if([...box.querySelectorAll('textarea')].some(t=>t.value.trim())) return;
+    window.renderAnonInboxV13();
+  };
+  function draw(threads){
+    const box=document.getElementById('anonInboxV13'); if(!box) return;
+    window.__anonThreads=threads;
+    const cnt=s=>s==='Semua'?threads.length:threads.filter(t=>t.status===s).length, shown=filter==='Semua'?threads:threads.filter(t=>t.status===filter);
+    box.innerHTML=`<div class="an13-note">🔒 Pengirim <b>tidak diketahui</b>: sistem tidak menyimpan NIK atau nama. Balasan Anda tidak mencantumkan nama HR. Data tersimpan di spreadsheet terpisah dan hanya dihapus oleh HR.</div>
+      <div class="an13-filter">${['Semua','Baru','Diproses','Selesai'].map(f=>`<button class="${f===filter?'on':''}" onclick="anonFilterV13('${f}')">${f} (${cnt(f)})</button>`).join('')}</div>`+
+    (shown.length?shown.map(t=>{const last=t.messages[t.messages.length-1]||{};return `<details class="an13-card an13-t" data-t="${esc(t.ticket)}" ${t.ticket===openTicket?'open':''} ontoggle="anonToggleV13(this)"><summary><div class="an13-row"><span class="an13-chip cat">${esc(t.category)}</span><span class="an13-chip ${esc(t.status)}">${esc(t.status)}</span>${t.unread_hr?'<span class="an13-dot"></span>':''}<span class="an13-meta" style="margin-left:auto">${esc(fmt(t.updated_at))}</span></div><div style="font-size:11.5px;margin-top:6px;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(last.text||'').slice(0,90))}</div></summary>
+       <div style="margin-top:8px">${t.messages.map(m=>`<div class="an13-bub ${m.from==='hr'?'user':'hr'}" style="${m.from==='hr'?'background:#e0f2fe;color:#0c4a6e;margin-left:auto;margin-right:0':'background:#f1f5f9;color:#0f172a;margin-right:auto;margin-left:0'}">${esc(m.text)}<small>${m.from==='hr'?'HR':'Anonim'} · ${esc(fmt(m.at))}</small></div>`).join('')}</div>
+       <textarea id="anHrReply_${esc(t.ticket)}" rows="3" maxlength="3000" placeholder="Tulis balasan untuk pengirim anonim…" style="margin-top:6px"></textarea>
+       <div class="an13-btns"><button class="btn" onclick="anonHrReplyV13('${esc(t.ticket)}')">Kirim balasan</button>${t.status!=='Diproses'?`<button class="btn secondary" onclick="anonHrStatusV13('${esc(t.ticket)}','Diproses')">Tandai Diproses</button>`:''}${t.status!=='Selesai'?`<button class="btn success" onclick="anonHrStatusV13('${esc(t.ticket)}','Selesai')">Tandai Selesai</button>`:''}<button class="btn danger" onclick="anonHrDeleteV13('${esc(t.ticket)}')">🗑️ Hapus</button></div></details>`;}).join(''):'<div class="empty">Tidak ada pesan pada filter ini.</div>');
+  }
+  window.anonFilterV13=function(f){filter=f;draw(window.__anonThreads||[]);};
+  window.anonToggleV13=function(d){
+    if(!d.open){if(openTicket===d.dataset.t)openTicket=null;return;}
+    openTicket=d.dataset.t; const t=(window.__anonThreads||[]).find(x=>x.ticket===openTicket);
+    if(t&&t.unread_hr){t.unread_hr=false;d.querySelector('.an13-dot')?.remove();gasCall('anonHrStatus',{ticket:t.ticket,markRead:true});}
+  };
+  window.anonHrReplyV13=async function(ticket){
+    const text=(document.getElementById('anHrReply_'+ticket)?.value||'').trim(); if(!text){showToast('⚠️ Tulis balasan terlebih dahulu.');return;}
+    const r=await gasCall('anonHrReply',{ticket,text}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal mengirim.'));return;}
+    openTicket=ticket; showToast('✅ Balasan terkirim.'); renderAnonInboxV13();
+  };
+  window.anonHrStatusV13=async function(ticket,status){
+    const r=await gasCall('anonHrStatus',{ticket,status}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal.'));return;}
+    openTicket=ticket; renderAnonInboxV13();
+  };
+  window.anonHrDeleteV13=async function(ticket){
+    if(!confirm('Hapus percakapan ini secara permanen? Pengirim tidak akan dapat membukanya lagi.'))return;
+    const r=await gasCall('anonHrDelete',{ticket}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal menghapus.'));return;}
+    openTicket=null; showToast('🗑️ Percakapan dihapus.'); renderAnonInboxV13();
   };
 })();
 </script>
