@@ -5235,9 +5235,6 @@ async function confirmHrisFullResetV1(){
 .v12-sec>.v12-grp-title .v12-name{flex:1;display:block;min-width:0}
 .v12-name b{display:block;font-size:13px;font-weight:800;color:#0f172a}
 .v12-name small{display:block;font-size:10px;font-weight:500;color:#64748b;margin-top:1px}
-.v12-gico{width:34px;height:34px;flex:0 0 34px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 10px rgba(15,23,42,.14)}
-.v12-gico svg,.v12-grp .home-tile .icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.v12-grp .home-tile .icon.v12-ico{color:#fff;box-shadow:0 3px 8px rgba(15,23,42,.14)}
 .v12-sec>.v12-grp-title{border-left:4px solid var(--g,#2563eb)}
 .nr12-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 12px;margin-bottom:8px}
 .nr12-card .t{font-size:12px;font-weight:800}.nr12-card .m{font-size:10.5px;color:#64748b;margin-top:4px}.nr12-card .s{font-size:10.5px;line-height:1.5;margin-top:6px;overflow-wrap:anywhere;color:#334155}
@@ -5249,16 +5246,11 @@ async function confirmHrisFullResetV1(){
 .v12-chev{font-size:13px;color:#94a3b8;transition:transform .15s}
 .v12-sec.collapsed .v12-chev{transform:rotate(-90deg)}
 .v12-sec.collapsed>.v12-grp{display:none}
-.v12-grp{display:flex;flex-direction:column;gap:6px}
-.v12-grp .home-tile{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px;position:relative}
-.v12-grp .home-tile .icon{font-size:18px;margin:0;width:34px;height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:11px}
-.v12-grp .home-tile .title{font-size:12.5px;font-weight:700}
-.v12-grp .home-tile .desc{font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.v12-grp .home-tile .v12-body{min-width:0;flex:1}
-.v12-grp .home-tile::after{content:'›';font-size:18px;color:#cbd5e1;margin-left:4px}
-.v12-grp .home-tile .notify{position:static;margin-left:auto;flex:0 0 auto}
 .v12-grp .home-tile.v12-danger{border-color:#fecaca;background:#fff7f7}
-.v12-grp .home-tile.v12-danger .icon{background:#fee2e2}
+.v12-gemoji{font-size:21px;width:34px;flex:0 0 34px;text-align:center}
+.v12-grp{margin-bottom:4px}
+.navbtn{position:relative}
+.v14-nb{position:absolute;top:1px;left:calc(50% + 6px);min-width:15px;height:15px;padding:0 4px;border-radius:99px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;line-height:15px;text-align:center;box-sizing:border-box;box-shadow:0 0 0 2px #fff}
 .ag12-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .ag12-head h2{margin:0;font-size:15px}
 .ag12-chips{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}
@@ -5352,7 +5344,7 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
     if(!tiles.some(t=>titleOf(t)==='Pesan Anonim')){
       const b=document.createElement('button'); b.className='home-tile';
       const un=(cache.anonHrList?.data?.threads||[]).filter(x=>x.unread_hr).length;
-      b.innerHTML='<div class="icon">🔒</div><div class="title">Pesan Anonim</div><div class="desc">Curhat dari karyawan & Leader. Pengirim tidak diketahui.</div>'+(un?`<span class="notify">${un}</span>`:'');
+      b.innerHTML='<div class="icon">🕊️</div><div class="title">Pesan Anonim</div><div class="desc">Curhat dari karyawan & Leader. Pengirim tidak diketahui.</div>'+(un?`<span class="notify">${un}</span>`:'');
       b.onclick=()=>renderAnonInboxV13(); tiles.push(b);
     }
     tiles.forEach(t=>{
@@ -5362,19 +5354,16 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
     });
     const open=loadOpen(), wrap=document.createElement('div'), used=new Set();
     const byTitle=new Map(); tiles.forEach(t=>{if(!byTitle.has(titleOf(t)))byTitle.set(titleOf(t),t);});
+    const EMO={act:'⚡',team:'👥',comm:'💬',adm:'⚙️',other:'📂'}, COL={act:'#2563eb',team:'#7c3aed',comm:'#059669',adm:'#475569',other:'#475569'};
+    const SUB={act:'Absensi, XP & kehadiran',team:'Ide, catatan & performa tim',comm:'Pesan pribadi & anonim',adm:'Pengguna & reset data',other:'Menu tambahan'};
     const mk=(key,name,list,defOpen)=>{
       if(!list.length) return;
       let nb=0;
-      list.forEach(t=>{const icon=t.querySelector('.icon')||document.createElement('div'),ttl=t.querySelector('.title'),desc=t.querySelector('.desc'),badge=t.querySelector('.notify');
-        if(badge)nb+=parseInt(badge.textContent)||0;
-        const ti=TILE_ICON[titleOf(t)]||['dot','slate']; icon.className='icon v12-ico'; icon.innerHTML=IC[ti[0]]; icon.style.background=GR[ti[1]];
-        const body=document.createElement('div'); body.className='v12-body'; if(ttl)body.appendChild(ttl); if(desc)body.appendChild(desc);
-        t.innerHTML=''; t.appendChild(icon); t.appendChild(body); if(badge)t.appendChild(badge);
-        if(/Reset/.test(titleOf(t)))t.classList.add('v12-danger');});
-      const isOpen=open[key]!==undefined?open[key]:defOpen, gm=GROUP_META[key]||GROUP_META.other;
-      const sec=document.createElement('section'); sec.className='v12-sec'+(isOpen?'':' collapsed'); sec.dataset.key=key; sec.style.setProperty('--g',{blue:'#2563eb',violet:'#7c3aed',green:'#059669',slate:'#475569'}[gm[1]]||'#2563eb');
-      sec.innerHTML=`<button type="button" class="v12-grp-title" onclick="v12Toggle(this)"><span class="v12-gico" style="background:${GR[gm[1]]}">${IC[gm[0]]}</span><span class="v12-name"><b>${esc(name)}</b><small>${esc(gm[2])}</small></span>${nb?`<span class="v12-nbadge">${nb}</span>`:''}<span class="v12-count">${list.length}</span><span class="v12-chev">▾</span></button>`;
-      const g=document.createElement('div'); g.className='v12-grp'; list.forEach(t=>g.appendChild(t)); sec.appendChild(g); wrap.appendChild(sec);
+      list.forEach(t=>{const badge=t.querySelector('.notify'); if(badge)nb+=parseInt(badge.textContent)||0; if(/Reset/.test(titleOf(t)))t.classList.add('v12-danger');});
+      const isOpen=open[key]!==undefined?open[key]:defOpen;
+      const sec=document.createElement('section'); sec.className='v12-sec'+(isOpen?'':' collapsed'); sec.dataset.key=key; sec.style.setProperty('--g',COL[key]||'#2563eb');
+      sec.innerHTML=`<button type="button" class="v12-grp-title" onclick="v12Toggle(this)"><span class="v12-gemoji">${EMO[key]||'📂'}</span><span class="v12-name"><b>${esc(name)}</b><small>${esc(SUB[key]||'')}</small></span>${nb?`<span class="v12-nbadge">${nb}</span>`:''}<span class="v12-count">${list.length}</span><span class="v12-chev">▾</span></button>`;
+      const g=document.createElement('div'); g.className='home-grid v12-grp'; list.forEach(t=>g.appendChild(t)); sec.appendChild(g); wrap.appendChild(sec);
     };
     GROUPS.forEach(([key,name,titles,defOpen])=>{
       const list=titles.map(x=>byTitle.get(x)).filter(Boolean); list.forEach(t=>used.add(t));
@@ -5415,12 +5404,14 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
   /* ===== Percepatan: antrean HR (cache singkat + perbarui di latar) ===== */
   const CACHED={getPendingActivities:()=>{if(typeof refreshHrPendingActivities==='function')refreshHrPendingActivities();},
                 getPendingAttendanceReviews:()=>{if(document.getElementById('nrv12'))window.renderNightAttendanceReviewsV1();},
-                anonHrList:()=>{if(typeof window.anonRefreshV13==='function')window.anonRefreshV13();}};
-  const INVALIDATE={reviewActivity:'getPendingActivities',cancelActivity:'getPendingActivities',addActivity:'getPendingActivities',resolveAttendanceReview:'getPendingAttendanceReviews',anonHrReply:'anonHrList',anonHrStatus:'anonHrList',anonHrDelete:'anonHrList'};
+                anonHrList:()=>{if(typeof window.anonRefreshV13==='function')window.anonRefreshV13();if(typeof window.v14Badges==='function')window.v14Badges();}};
+  const INVALIDATE={reviewActivity:'getPendingActivities',cancelActivity:'getPendingActivities',addActivity:'getPendingActivities',resolveAttendanceReview:'getPendingAttendanceReviews'};
   const cache={},busy={}; 
   const ck=a=>'v12_cache_'+a;
   Object.keys(CACHED).forEach(a=>{try{cache[a]=JSON.parse(sessionStorage.getItem(ck(a))||'null');}catch(_){}});
   const put=(a,data)=>{cache[a]={t:Date.now(),data};try{sessionStorage.setItem(ck(a),JSON.stringify(cache[a]));}catch(_){}};
+  window.v12CachePut=(a,d)=>put(a,d);
+  window.v12CacheGet=a=>cache[a]?.data||null;
   const drop=a=>{cache[a]=null;try{sessionStorage.removeItem(ck(a));}catch(_){}};
   const prevCall=window.gasCall;
   window.gasCall=async function(action){
@@ -5576,7 +5567,7 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
     r.items.forEach(i=>{window.__anonStatus[i.ticket]=i;});
     const gone=r.items.filter(i=>i.gone).map(i=>i.ticket); // dihapus HR → bersihkan dari perangkat
     if(gone.length) saveT(loadT().filter(t=>!gone.includes(t.ticket)));
-    updateTileBadge();
+    updateBadges();
   }
 
   /* ---------- tile di Beranda Karyawan & Leader ---------- */
@@ -5593,10 +5584,10 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
     const b=document.createElement('button'); b.className='home-tile'; b.dataset.anonV13='1';
     b.setAttribute('onclick','renderAnonHomeV13()');
     b.innerHTML='<div class="icon">🕊️</div><div class="title">Curhat Anonim ke HR</div><div class="desc">Tanpa nama. Hanya HR yang membaca.</div>';
-    grid.appendChild(b); updateTileBadge();
+    grid.appendChild(b); updateTileBadge(); getPass(false).catch(()=>{}); // siapkan tiket lebih dulu agar kirim tidak menunggu
     if(Date.now()-lastPoll>60000){lastPoll=Date.now();pollMine();}
   }
-  new MutationObserver(()=>{try{injectTile();}catch(_){}}).observe(document.getElementById('content'),{childList:true});
+  /* (observer terpadu didefinisikan di bagian akhir) */
 
   /* ---------- halaman Karyawan/Leader ---------- */
   window.renderAnonHomeV13=function(){
@@ -5613,6 +5604,9 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
     const st=window.__anonStatus[t.ticket]||{};
     return `<div class="an13-card" onclick="renderAnonThreadV13('${esc(t.ticket)}')" style="cursor:pointer"><div class="an13-row"><span class="an13-chip cat">${esc(t.category||'Curhat')}</span>${st.status?`<span class="an13-chip ${esc(st.status)}">${esc(st.status)}</span>`:''}${st.unread_user?'<span class="an13-dot"></span><span class="an13-meta" style="color:#b91c1c;font-weight:700">Balasan baru</span>':''}<span class="an13-meta" style="margin-left:auto">${esc(fmt(t.created))}</span></div><div class="an13-meta" style="margin-top:6px">Kode: ${esc(t.ticket)}</div></div>`;
   }
+  const TC=t=>'anon_thread_v14_'+(state.activeProfile?.nik||'')+'_'+t;
+  const getTC=t=>{try{return JSON.parse(localStorage.getItem(TC(t))||'null');}catch(_){return null;}};
+  const putTC=(t,v)=>{try{localStorage.setItem(TC(t),JSON.stringify(v));}catch(_){}};
   window.anonSendV13=async function(){
     const text=(document.getElementById('anText')?.value||'').trim(),category=document.getElementById('anCat')?.value||'Curhat';
     if(!text){showToast('⚠️ Tulis pesan terlebih dahulu.');return;}
@@ -5621,8 +5615,9 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
     if(btn){btn.disabled=false;btn.textContent='🕊️ Kirim Anonim';}
     if(!res?.ok){showToast('❌ '+(res?.message||'Gagal mengirim. Coba lagi.'));return;}
     const arr=loadT(); arr.push({ticket:res.ticket,key:res.key,category:res.category,created:res.created_at}); saveT(arr);
+    putTC(res.ticket,{ticket:res.ticket,category:res.category,status:'Baru',created_at:res.created_at,updated_at:res.created_at,messages:[{from:'user',text,at:res.created_at}]});
     showToast('✅ Pesan terkirim secara anonim.');
-    renderAnonThreadV13(res.ticket,true);
+    renderAnonThreadV13(res.ticket,true); // tampil langsung dari data lokal, tanpa menunggu server
   };
   window.anonRestoreV13=async function(){
     const raw=(document.getElementById('anCode')?.value||'').trim(),[ticket,key]=raw.split('-');
@@ -5631,27 +5626,42 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
     const arr=loadT(); if(!arr.some(t=>t.ticket===ticket)){arr.push({ticket,key,category:r.thread.category,created:r.thread.created_at});saveT(arr);}
     showToast('✅ Percakapan dipulihkan.'); renderAnonHomeV13();
   };
-  window.renderAnonThreadV13=async function(ticket,justSent){
-    const c=document.getElementById('content'),rec=loadT().find(t=>t.ticket===ticket); if(!c||!rec) return;
-    c.innerHTML=head('🕊️ Percakapan Anonim')+'<div class="an13-meta" style="margin:6px 2px">⏳ Memuat…</div>';
-    const r=await anonCall('anonRead',{ticket,key:rec.key});
-    if(!r?.ok){c.innerHTML=head('🕊️ Percakapan Anonim')+`<div class="an13-card">${esc(r?.message||'Gagal memuat.')}</div>`;return;}
-    const th=r.thread; window.__anonStatus[ticket]={...(window.__anonStatus[ticket]||{}),status:th.status,unread_user:false}; updateTileBadge();
-    c.innerHTML=head('🕊️ Percakapan Anonim')+
+  function threadHtml(ticket,rec,th,justSent){
+    return head('🕊️ Percakapan Anonim')+
     `<div class="an13-card"><div class="an13-row"><span class="an13-chip cat">${esc(th.category)}</span><span class="an13-chip ${esc(th.status)}">${esc(th.status)}</span></div>
       <div class="an13-meta" style="margin-top:8px">Kode percakapan Anda (simpan untuk membuka balasan di perangkat lain):</div><div class="an13-code" id="anCodeShow">${esc(ticket)}-${esc(rec.key)}</div>
       <div class="an13-btns"><button class="btn secondary" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('anCodeShow').textContent).then(()=>showToast('Kode disalin'))">📋 Salin kode</button></div>${justSent?'<div class="an13-meta" style="margin-top:8px">Terkirim. HR akan membalas di sini; buka kembali halaman ini untuk melihat balasan.</div>':''}</div>
      <div id="anMsgs">${th.messages.map(m=>`<div class="an13-bub ${m.from==='hr'?'hr':'user'}">${esc(m.text)}<small>${m.from==='hr'?'HR':'Anda'} · ${esc(fmt(m.at))}</small></div>`).join('')}</div>
      <div class="an13-card an13-form"><textarea id="anReply" rows="3" maxlength="3000" placeholder="Tulis balasan…"></textarea><button class="btn" id="anReplyBtn" onclick="anonReplyV13('${esc(ticket)}')">Kirim</button></div>
      <button class="btn secondary" style="margin-top:6px" onclick="anonForgetV13('${esc(ticket)}')">Hapus dari perangkat ini</button>`;
+  }
+  window.renderAnonThreadV13=async function(ticket,justSent){
+    const c=document.getElementById('content'),rec=loadT().find(t=>t.ticket===ticket); if(!c||!rec) return;
+    const token=window.__hrisNavSeq||0, cached=getTC(ticket);
+    // 1) tampilkan data tersimpan di perangkat seketika; 2) segarkan dari server di latar belakang
+    if(cached) c.innerHTML=threadHtml(ticket,rec,cached,justSent);
+    else c.innerHTML=head('🕊️ Percakapan Anonim')+'<div class="an13-meta" style="margin:6px 2px">⏳ Memuat…</div>';
+    if(justSent&&cached) return;
+    const r=await anonCall('anonRead',{ticket,key:rec.key});
+    if(token!==(window.__hrisNavSeq||0)||!document.getElementById('content')) return;
+    if(!r?.ok){ if(!cached) c.innerHTML=head('🕊️ Percakapan Anonim')+`<div class="an13-card">${esc(r?.message||'Gagal memuat.')}</div>`; return; }
+    const th=r.thread; putTC(ticket,th);
+    window.__anonStatus[ticket]={...(window.__anonStatus[ticket]||{}),status:th.status,unread_user:false}; updateTileBadge(); if(window.v14Badges)window.v14Badges();
+    const typing=(document.getElementById('anReply')?.value||'');
+    if(!cached||JSON.stringify(cached.messages)!==JSON.stringify(th.messages)||cached.status!==th.status){
+      c.innerHTML=threadHtml(ticket,rec,th,justSent); const ta=document.getElementById('anReply'); if(ta&&typing)ta.value=typing;
+    }
   };
   window.anonReplyV13=async function(ticket){
-    const rec=loadT().find(t=>t.ticket===ticket),text=(document.getElementById('anReply')?.value||'').trim(); if(!rec) return;
+    const rec=loadT().find(t=>t.ticket===ticket),ta=document.getElementById('anReply'),text=(ta?.value||'').trim(); if(!rec) return;
     if(!text){showToast('⚠️ Tulis balasan terlebih dahulu.');return;}
-    const b=document.getElementById('anReplyBtn'); if(b)b.disabled=true;
-    const r=await anonWithPass('anonUserReply',{ticket,key:rec.key,text}); if(b)b.disabled=false;
-    if(!r?.ok){showToast('❌ '+(r?.message||'Gagal mengirim.'));return;}
-    renderAnonThreadV13(ticket);
+    // tampil dulu, kirim di latar belakang
+    const now=new Date().toISOString(),box=document.getElementById('anMsgs');
+    const el=document.createElement('div'); el.className='an13-bub user'; el.style.opacity='.6'; el.innerHTML=`${esc(text)}<small>Anda · mengirim…</small>`; box?.appendChild(el); ta.value='';
+    const r=await anonWithPass('anonUserReply',{ticket,key:rec.key,text});
+    if(!r?.ok){el.remove();ta.value=text;showToast('❌ '+(r?.message||'Gagal mengirim.'));return;}
+    el.style.opacity='1'; el.querySelector('small').textContent='Anda · '+fmt(now);
+    const c0=getTC(ticket); if(c0){c0.messages=r.messages||[...c0.messages,{from:'user',text,at:now}];putTC(ticket,c0);}
   };
   window.anonForgetV13=function(ticket){
     if(!confirm('Hapus percakapan ini dari perangkat? Tanpa kode percakapan, balasan HR tidak dapat dibuka lagi.'))return;
@@ -5690,21 +5700,106 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
   window.anonToggleV13=function(d){
     if(!d.open){if(openTicket===d.dataset.t)openTicket=null;return;}
     openTicket=d.dataset.t; const t=(window.__anonThreads||[]).find(x=>x.ticket===openTicket);
-    if(t&&t.unread_hr){t.unread_hr=false;d.querySelector('.an13-dot')?.remove();gasCall('anonHrStatus',{ticket:t.ticket,markRead:true});}
+    if(t&&t.unread_hr){t.unread_hr=false;d.querySelector('.an13-dot')?.remove();gasCall('anonHrStatus',{ticket:t.ticket,markRead:true});try{window.v12CachePut&&window.v12CachePut('anonHrList',{ok:true,threads:window.__anonThreads});}catch(_){} if(window.v14Badges)window.v14Badges();}
   };
+  const syncCache=()=>{try{window.v12CachePut&&window.v12CachePut('anonHrList',{ok:true,threads:window.__anonThreads});}catch(_){} if(window.v14Badges)window.v14Badges();};
   window.anonHrReplyV13=async function(ticket){
-    const text=(document.getElementById('anHrReply_'+ticket)?.value||'').trim(); if(!text){showToast('⚠️ Tulis balasan terlebih dahulu.');return;}
-    const r=await gasCall('anonHrReply',{ticket,text}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal mengirim.'));return;}
-    openTicket=ticket; showToast('✅ Balasan terkirim.'); renderAnonInboxV13();
+    const ta=document.getElementById('anHrReply_'+ticket),text=(ta?.value||'').trim(); if(!text){showToast('⚠️ Tulis balasan terlebih dahulu.');return;}
+    const t=(window.__anonThreads||[]).find(x=>x.ticket===ticket); if(!t) return;
+    const before=JSON.stringify(t), now=new Date().toISOString();
+    t.messages.push({from:'hr',text,at:now}); if(t.status==='Baru')t.status='Diproses'; t.updated_at=now; t.unread_hr=false; t.last_from='hr';
+    openTicket=ticket; draw(window.__anonThreads); syncCache();           // tampil seketika
+    const r=await gasCall('anonHrReply',{ticket,text});
+    if(!r?.ok){Object.assign(t,JSON.parse(before));draw(window.__anonThreads);syncCache();showToast('❌ '+(r?.message||r?.error||'Gagal mengirim.'));return;}
+    showToast('✅ Balasan terkirim.');
   };
   window.anonHrStatusV13=async function(ticket,status){
-    const r=await gasCall('anonHrStatus',{ticket,status}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal.'));return;}
-    openTicket=ticket; renderAnonInboxV13();
+    const t=(window.__anonThreads||[]).find(x=>x.ticket===ticket); if(!t) return;
+    const prev=t.status; t.status=status; openTicket=ticket; draw(window.__anonThreads); syncCache();
+    const r=await gasCall('anonHrStatus',{ticket,status});
+    if(!r?.ok){t.status=prev;draw(window.__anonThreads);syncCache();showToast('❌ '+(r?.message||r?.error||'Gagal.'));}
   };
   window.anonHrDeleteV13=async function(ticket){
     if(!confirm('Hapus percakapan ini secara permanen? Pengirim tidak akan dapat membukanya lagi.'))return;
-    const r=await gasCall('anonHrDelete',{ticket}); if(!r?.ok){showToast('❌ '+(r?.message||r?.error||'Gagal menghapus.'));return;}
-    openTicket=null; showToast('🗑️ Percakapan dihapus.'); renderAnonInboxV13();
+    const all=window.__anonThreads||[],idx=all.findIndex(x=>x.ticket===ticket); if(idx<0) return;
+    const [removed]=all.splice(idx,1); openTicket=null; draw(all); syncCache();
+    const r=await gasCall('anonHrDelete',{ticket});
+    if(!r?.ok){all.splice(idx,0,removed);draw(all);syncCache();showToast('❌ '+(r?.message||r?.error||'Gagal menghapus.'));return;}
+    showToast('🗑️ Percakapan dihapus.');
   };
+
+  /* ---------- Lencana di semua menu + polling ---------- */
+  const privUnread=()=>{try{return typeof getUnreadHRMessages==='function'?getUnreadHRMessages(String(state.activeProfile?.nik||'')).length:0;}catch(_){return 0;}};
+  const hrUnread=()=>{const d=window.v12CacheGet&&window.v12CacheGet('anonHrList');return ((d&&d.threads)||window.__anonThreads||[]).filter(t=>t.unread_hr).length;};
+  const totalUnread=()=>role()==='hr'?hrUnread():(unreadCount()+privUnread());
+  function groupBadges(){
+    document.querySelectorAll('.v12-sec').forEach(sec=>{
+      const n=[...sec.querySelectorAll('.home-tile .notify')].reduce((a,e)=>a+(parseInt(e.textContent)||0),0);
+      const hd=sec.querySelector('.v12-grp-title'); if(!hd) return; let b=hd.querySelector('.v12-nbadge');
+      if(n){ if(!b){b=document.createElement('span');b.className='v12-nbadge';const cn=hd.querySelector('.v12-count');cn?cn.before(b):hd.appendChild(b);} b.textContent=n; } else if(b) b.remove();
+    });
+  }
+  function updateNavDots(){
+    const nav=document.getElementById('bottomNav'); if(!nav) return; const n=totalUnread();
+    nav.querySelectorAll('.navbtn').forEach(btn=>{
+      const oc=btn.getAttribute('onclick')||'', wants=/'home'/.test(oc)||(role()==='hr'&&/hr_messages/.test(oc));
+      let d=btn.querySelector('.v14-nb');
+      if(wants&&n){ if(!d){d=document.createElement('i');d.className='v14-nb';btn.appendChild(d);} d.textContent=n>99?'99+':n; } else if(d) d.remove();
+    });
+  }
+  function updateBadges(){
+    try{
+      updateTileBadge();
+      if(role()==='hr'){
+        const t=[...document.querySelectorAll('#content .home-tile')].find(x=>(x.querySelector('.title')?.textContent||'').trim()==='Pesan Anonim');
+        if(t){const n=hrUnread();let b=t.querySelector('.notify');if(n){if(!b){b=document.createElement('span');b.className='notify';t.appendChild(b);}b.textContent=n;}else if(b)b.remove();}
+        groupBadges();
+      }
+      updateNavDots();
+    }catch(_){}
+  }
+  window.v14Badges=updateBadges;
+  async function pollAll(){
+    if(!state.activeProfile?.nik||!GAS_URL) return;
+    try{if(!sessionStorage.getItem('ag_session_token')) return;}catch(_){}
+    if(document.visibilityState==='hidden') return;
+    try{
+      if(role()==='hr'){const r=await gasCall('anonHrList',{}); if(r?.ok&&!document.getElementById('anonInboxV13'))window.__anonThreads=(window.v12CacheGet&&window.v12CacheGet('anonHrList')||r).threads;}
+      else if(['karyawan','leader'].includes(role())) await pollMine();
+    }catch(_){}
+    updateBadges();
+  }
+  setTimeout(pollAll,2500); setInterval(pollAll,45000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pollAll();});
+
+  /* ---------- Gabungkan menu Kontribusi & Ide ---------- */
+  const titleOf=t=>(t.querySelector('.title')?.textContent||'').trim();
+  function mergeTiles(){
+    const c=document.getElementById('content'); if(!c||c.querySelector('[data-merged-v14]')) return;
+    let cfg=null;
+    if(role()==='karyawan') cfg={a:['Kontribusi Positif'],b:['Ide & Inovasi'],title:'Kontribusi & Ide',desc:'Catat hal baik & sampaikan gagasan.',on:"switchTab('halbaik',true)"};
+    else if(role()==='leader') cfg={a:['Kontribusi Tim','Hal Baik Tim'],b:['Ide Anggota'],title:'Kontribusi & Ide Tim',desc:'Validasi kontribusi & teruskan ide ke HR.',on:"showLeaderSection('halbaik')"};
+    if(!cfg) return;
+    const tiles=[...c.querySelectorAll('.home-grid > .home-tile')];
+    const ta=tiles.find(t=>cfg.a.includes(titleOf(t))),tb=tiles.find(t=>cfg.b.includes(titleOf(t))); if(!ta||!tb) return;
+    const n=t=>parseInt(t.querySelector('.notify')?.textContent)||0,sum=n(ta)+n(tb);
+    const m=document.createElement('button'); m.className='home-tile'; m.dataset.mergedV14='1'; m.setAttribute('onclick',cfg.on);
+    m.innerHTML=`<div class="icon">🌟</div><div class="title">${cfg.title}</div><div class="desc">${cfg.desc}</div>${sum?`<span class="notify">${sum}</span>`:''}`;
+    ta.replaceWith(m); tb.remove();
+  }
+  function ensureBars(){
+    const c=document.getElementById('content'); if(!c||c.querySelector('#kiBar14')) return;
+    if(role()==='karyawan'&&['halbaik','ide'].includes(state.currentTab)){
+      const t=state.currentTab;
+      c.insertAdjacentHTML('afterbegin',`<div class="subnav-tabs" id="kiBar14"><button class="subnav-btn ${t==='halbaik'?'active':''}" onclick="switchTab('halbaik',false)">🌱 Kontribusi Positif</button><button class="subnav-btn ${t==='ide'?'active':''}" onclick="switchTab('ide',false)">💡 Ide &amp; Inovasi</button></div>`);
+    } else if(role()==='leader'){
+      const hd=c.querySelector('.home-section-title'),ttl=hd?.querySelector('span')?.textContent.trim();
+      if(hd&&c.querySelector('#leaderSectionList')&&['Hal Baik Tim','Ide Anggota'].includes(ttl))
+        hd.insertAdjacentHTML('afterend',`<div class="subnav-tabs" id="kiBar14"><button class="subnav-btn ${ttl==='Hal Baik Tim'?'active':''}" onclick="showLeaderSection('halbaik')">🌱 Kontribusi Tim</button><button class="subnav-btn ${ttl==='Ide Anggota'?'active':''}" onclick="showLeaderSection('ideas')">💡 Ide Anggota</button></div>`);
+    }
+  }
+  function onContent(){try{injectTile();mergeTiles();ensureBars();updateBadges();}catch(e){console.warn('v13 content',e);}}
+  new MutationObserver(onContent).observe(document.getElementById('content'),{childList:true});
+  const navEl=document.getElementById('bottomNav'); if(navEl) new MutationObserver(()=>{try{updateNavDots();}catch(_){}}).observe(navEl,{childList:true});
 })();
 </script>
