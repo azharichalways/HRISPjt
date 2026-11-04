@@ -5186,7 +5186,7 @@ async function confirmHrisFullResetV1(){
     if(!isHR()) return;
     initUsers();
     const c=document.getElementById('content'),users=state.allUsers.filter(u=>u.role!=='hr'&&u.active!==false).sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
-    c.innerHTML=`<div class="v4-section-head"><strong>🛠️ Koreksi XP</strong></div><div class="card"><div style="font-size:10.5px;color:#64748b;margin-bottom:8px">Gunakan fitur ini (bukan edit manual spreadsheet) agar total XP, riwayat & audit tetap konsisten. Setiap koreksi tercatat di sheet XPAdjustments dan AuditLog.</div><label>Karyawan / Leader</label><select id="xkUser" onchange="xkShowCurrentV11()">${users.map(u=>`<option value="${esc(u.nik)}">${esc(u.nama)} — ${esc(roleLabel(u.role))}</option>`).join('')}</select><div id="xkCurrent" style="font-size:11px;font-weight:700;margin:4px 0 8px"></div><label>Perubahan XP (+ menambah, − mengurangi, maks ±1000)</label><input type="number" id="xkDelta" step="1" placeholder="cth. 50 atau -30"><label>Alasan (wajib)</label><textarea id="xkReason" rows="3" placeholder="cth. Koreksi XP agenda 12 Nov yang salah hitung"></textarea><button class="btn" id="xkBtn" onclick="xkSubmitV11()">💾 Simpan Koreksi</button></div><h2 class="section-title">Riwayat Koreksi XP</h2><div id="xkHistory"><div class="muted">⏳ Memuat…</div></div>`;
+    c.innerHTML=`<div class="v4-section-head"><strong>🛠️ Koreksi XP</strong><button class="v4-back" onclick="appBack()">← Beranda</button></div><div class="card"><div style="font-size:10.5px;color:#64748b;margin-bottom:8px">Gunakan fitur ini (bukan edit manual spreadsheet) agar total XP, riwayat & audit tetap konsisten. Setiap koreksi tercatat di sheet XPAdjustments dan AuditLog.</div><label>Karyawan / Leader</label><select id="xkUser" onchange="xkShowCurrentV11()">${users.map(u=>`<option value="${esc(u.nik)}">${esc(u.nama)} — ${esc(roleLabel(u.role))}</option>`).join('')}</select><div id="xkCurrent" style="font-size:11px;font-weight:700;margin:4px 0 8px"></div><label>Perubahan XP (+ menambah, − mengurangi, maks ±1000)</label><input type="number" id="xkDelta" step="1" placeholder="cth. 50 atau -30"><label>Alasan (wajib)</label><textarea id="xkReason" rows="3" placeholder="cth. Koreksi XP agenda 12 Nov yang salah hitung"></textarea><button class="btn" id="xkBtn" onclick="xkSubmitV11()">💾 Simpan Koreksi</button></div><h2 class="section-title">Riwayat Koreksi XP</h2><div id="xkHistory"><div class="muted">⏳ Memuat…</div></div>`;
     xkShowCurrentV11(); xkLoadHistoryV11();
   };
   window.xkShowCurrentV11=function(){const n=document.getElementById('xkUser')?.value;const u=state.allUsers.find(x=>String(x.nik)===String(n));const el=document.getElementById('xkCurrent');if(el)el.textContent=u?('XP saat ini: '+(u.xp||0)):'';};
@@ -5229,6 +5229,14 @@ async function confirmHrisFullResetV1(){
 </script>
 <style id="v12-style">
 .v12-grp-title{display:flex;align-items:center;gap:6px;margin:16px 2px 7px;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim,#64748b)}
+.v12-sec{margin-top:10px}
+.v12-sec>.v12-grp-title{width:100%;margin:0 0 6px;padding:10px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;font-size:11px;letter-spacing:.05em;cursor:pointer;color:#334155;text-align:left}
+.v12-sec>.v12-grp-title .v12-name{flex:1}
+.v12-count{font-size:10px;font-weight:800;background:#f1f5f9;color:#64748b;border-radius:99px;padding:2px 8px}
+.v12-nbadge{font-size:10px;font-weight:800;background:#ef4444;color:#fff;border-radius:99px;padding:2px 7px}
+.v12-chev{font-size:13px;color:#94a3b8;transition:transform .15s}
+.v12-sec.collapsed .v12-chev{transform:rotate(-90deg)}
+.v12-sec.collapsed>.v12-grp{display:none}
 .v12-grp{display:flex;flex-direction:column;gap:6px}
 .v12-grp .home-tile{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px;position:relative}
 .v12-grp .home-tile .icon{font-size:18px;margin:0;width:30px;height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:9px}
@@ -5273,55 +5281,116 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const isHR=()=>String(state.activeProfile?.role||'').toLowerCase()==='hr';
 
-  /* ===== Beranda HR: kelompokkan menu ===== */
+  /* ===== Beranda HR: kelompokkan menu (bisa dilipat) ===== */
   const GROUPS=[
-    ['Tindakan harian',['Pemeriksaan Absensi','Ide & Kontribusi','Catatan Leader','Tinjau Koreksi Absensi']],
-    ['Tim & kinerja',['Detail Performa','Laporan Bulanan','Kehadiran Saya','Skor & Penyebab']],
-    ['Komunikasi',['Agenda & Broadcast','Pesan Pribadi']],
-    ['Administrasi',['Kelola Pengguna','Koreksi XP','Menu Reset Data']]
+    ['act','Tindakan harian',['Pemeriksaan Absensi','Koreksi XP','Kehadiran Saya','Tinjau Koreksi Absensi'],true],
+    ['team','Tim & Kinerja',['Ide & Kontribusi','Catatan Leader','Laporan Bulanan','Detail Performa','Skor & Penyebab'],false],
+    ['comm','Komunikasi',['Pesan Pribadi'],false],
+    ['adm','Administrasi',['Kelola Pengguna','Menu Reset Data'],false]
   ];
+  const HIDDEN_TILES=['Agenda & Broadcast']; // sudah ada di menu bawah "Agenda"
+  window.__v12Tiles=window.__v12Tiles||{};
+  const loadOpen=()=>{try{return JSON.parse(localStorage.getItem('v12_hr_groups')||'{}');}catch(_){return {};}};
+  window.v12Toggle=function(btn){
+    const sec=btn.closest('.v12-sec'); if(!sec) return; sec.classList.toggle('collapsed');
+    const st=loadOpen(); st[sec.dataset.key]=!sec.classList.contains('collapsed'); try{localStorage.setItem('v12_hr_groups',JSON.stringify(st));}catch(_){}
+  };
+  // Tile yang diberi handler lewat JavaScript (bukan atribut) hilang saat halaman dipulihkan dari snapshot "Kembali".
+  // Karena itu tiap handler didaftarkan dan dipanggil lewat atribut onclick, sekaligus mencatat riwayat halaman.
+  window.v12Tile=function(key){
+    const fn=window.__v12Tiles[key]; if(typeof fn!=='function') return;
+    try{v102RememberView();history.pushState({v102Detail:true},'',location.hash||'#'+(state.currentTab||'home'));}catch(_){}
+    return fn();
+  };
   function regroupHome(){
     const c=document.getElementById('content'); if(!c) return;
-    const grids=[...c.querySelectorAll('.home-grid')]; if(!grids.length||c.querySelector('.v12-grp')) return;
-    const tiles=grids.flatMap(g=>[...g.querySelectorAll(':scope > .home-tile')]);
+    const grids=[...c.querySelectorAll('.home-grid')]; if(!grids.length||c.querySelector('.v12-sec')) return;
+    let tiles=grids.flatMap(g=>[...g.querySelectorAll(':scope > .home-tile')]);
     if(tiles.length<3) return;
     const titleOf=t=>(t.querySelector('.title')?.textContent||'').trim();
+    tiles=tiles.filter(t=>!HIDDEN_TILES.includes(titleOf(t)));
     if(!tiles.some(t=>titleOf(t)==='Pesan Pribadi')){
       const b=document.createElement('button'); b.className='home-tile';
       b.innerHTML='<div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim pesan ke satu, beberapa, atau semua karyawan.</div>';
       b.onclick=()=>renderHRMessagesPage(); tiles.push(b);
     }
-    const used=new Set(), wrap=document.createElement('div');
-    const mk=(name,list,extraCls)=>{
+    tiles.forEach(t=>{
+      if(!t.getAttribute('onclick')&&typeof t.onclick==='function'){
+        const key='t'+titleOf(t).replace(/[^a-zA-Z0-9]+/g,'_'); window.__v12Tiles[key]=t.onclick; t.onclick=null; t.setAttribute('onclick',`v12Tile('${key}')`);
+      }
+    });
+    const open=loadOpen(), wrap=document.createElement('div'), used=new Set();
+    const byTitle=new Map(); tiles.forEach(t=>{if(!byTitle.has(titleOf(t)))byTitle.set(titleOf(t),t);});
+    const mk=(key,name,list,defOpen)=>{
       if(!list.length) return;
-      wrap.insertAdjacentHTML('beforeend',`<div class="v12-grp-title">${esc(name)}</div>`);
-      const g=document.createElement('div'); g.className='v12-grp';
-      list.forEach(t=>{
-        const icon=t.querySelector('.icon'),ttl=t.querySelector('.title'),desc=t.querySelector('.desc'),badge=t.querySelector('.notify');
+      let nb=0;
+      list.forEach(t=>{const icon=t.querySelector('.icon'),ttl=t.querySelector('.title'),desc=t.querySelector('.desc'),badge=t.querySelector('.notify');
+        if(badge)nb+=parseInt(badge.textContent)||0;
         const body=document.createElement('div'); body.className='v12-body'; if(ttl)body.appendChild(ttl); if(desc)body.appendChild(desc);
         t.innerHTML=''; if(icon)t.appendChild(icon); t.appendChild(body); if(badge)t.appendChild(badge);
-        if(titleOf(t)==='Menu Reset Data'||/Reset/.test(titleOf(t))) t.classList.add('v12-danger');
-        g.appendChild(t);
-      }); wrap.appendChild(g);
+        if(/Reset/.test(titleOf(t)))t.classList.add('v12-danger');});
+      const isOpen=open[key]!==undefined?open[key]:defOpen;
+      const sec=document.createElement('section'); sec.className='v12-sec'+(isOpen?'':' collapsed'); sec.dataset.key=key;
+      sec.innerHTML=`<button type="button" class="v12-grp-title" onclick="v12Toggle(this)"><span class="v12-name">${esc(name)}</span>${nb?`<span class="v12-nbadge">${nb}</span>`:''}<span class="v12-count">${list.length}</span><span class="v12-chev">▾</span></button>`;
+      const g=document.createElement('div'); g.className='v12-grp'; list.forEach(t=>g.appendChild(t)); sec.appendChild(g); wrap.appendChild(sec);
     };
-    const byTitle=new Map(); tiles.forEach(t=>{if(!byTitle.has(titleOf(t)))byTitle.set(titleOf(t),t);});
-    const rest=[];
-    GROUPS.forEach(([name,titles],gi)=>{
+    GROUPS.forEach(([key,name,titles,defOpen])=>{
       const list=titles.map(x=>byTitle.get(x)).filter(Boolean); list.forEach(t=>used.add(t));
-      if(name==='Administrasi'){ // "Lainnya" disisipkan sebelum Administrasi; Reset Data selalu terakhir
-        const others=[...byTitle.values()].filter(t=>!used.has(t)); others.forEach(t=>used.add(t)); mk('Lainnya',others);
+      if(key==='adm'){
+        const others=[...byTitle.values()].filter(t=>!used.has(t)); others.forEach(t=>used.add(t)); mk('other','Lainnya',others,false);
         list.sort((a,b)=>(/Reset/.test(titleOf(a))?1:0)-(/Reset/.test(titleOf(b))?1:0));
       }
-      mk(name,list);
+      mk(key,name,list,defOpen);
     });
-    // buang grid & judul bagian lama, tempatkan susunan baru di posisi grid pertama
     const anchor=grids[0]; const oldTitles=grids.map(g=>g.previousElementSibling).filter(p=>p&&p.classList.contains('home-section-title'));
     anchor.parentNode.insertBefore(wrap,anchor);
     oldTitles.forEach(p=>p.remove()); grids.forEach(g=>g.remove());
-    c.querySelectorAll('.home-section-title').forEach(el=>{if(!el.nextElementSibling)el.remove();});
+    // Pemanasan: muat antrean kegiatan di latar belakang agar menu Agenda → Kegiatan langsung tampil.
+    try{if(GAS_URL&&sessionStorage.getItem('ag_session_token'))gasCall('getPendingActivities',{});}catch(_){}
   }
   const prevDash=window.renderHRDashboard;
   window.renderHRDashboard=function(){const r=prevDash.apply(this,arguments);try{if(isHR())regroupHome();}catch(e){console.warn('v12 regroup',e);}return r;};
+
+  /* ===== Navigasi "Kembali" yang konsisten ===== */
+  const prevSwitch=window.switchTab;
+  window.switchTab=function(tab,pushState){
+    // Berpindah menu utama = mulai alur baru; buang snapshot halaman detail lama agar Kembali tidak memulihkan halaman acak.
+    if(pushState!==false){try{v102Nav.length=0;}catch(_){}}
+    return prevSwitch.apply(this,arguments);
+  };
+  const prevBack=window.appBack;
+  window.appBack=function(){
+    if(history.state&&history.state.v102Detail&&v102Nav.length){history.back();return;} // sinkron dengan tombol Back browser/HP
+    return prevBack.apply(this,arguments);
+  };
+  const prevMsgPage=window.renderHRMessagesPage;
+  window.renderHRMessagesPage=function(){
+    const r=prevMsgPage.apply(this,arguments);
+    try{const h=document.querySelector('#content .v4-section-head'); if(h&&!h.querySelector('.v4-back'))h.insertAdjacentHTML('beforeend','<button class="v4-back" onclick="appBack()">← Beranda</button>');}catch(_){}
+    return r;
+  };
+
+  /* ===== Percepatan: antrean kegiatan HR (cache singkat + perbarui di latar) ===== */
+  const PC_KEY='v12_pending_cache'; let pc=null,bgBusy=false;
+  try{pc=JSON.parse(sessionStorage.getItem(PC_KEY)||'null');}catch(_){}
+  const savePc=()=>{try{sessionStorage.setItem(PC_KEY,JSON.stringify(pc));}catch(_){}};
+  const prevCall=window.gasCall;
+  window.gasCall=async function(action){
+    if(action==='getPendingActivities'){
+      const age=pc?Date.now()-pc.t:Infinity;
+      if(pc&&age<20000) return pc.data;
+      if(pc&&age<600000){ // data lama langsung ditampilkan, versi terbaru diambil di latar belakang
+        if(!bgBusy){bgBusy=true;prevCall.apply(this,arguments).then(res=>{bgBusy=false;if(res&&res.ok){const changed=JSON.stringify(res.activities)!==JSON.stringify(pc?.data?.activities);pc={t:Date.now(),data:res};savePc();if(changed&&typeof refreshHrPendingActivities==='function')refreshHrPendingActivities();}}).catch(()=>{bgBusy=false;});}
+        return pc.data;
+      }
+      const res=await prevCall.apply(this,arguments); if(res&&res.ok){pc={t:Date.now(),data:res};savePc();} return res;
+    }
+    if(['reviewActivity','cancelActivity','addActivity'].includes(action)){
+      pc=null;try{sessionStorage.removeItem(PC_KEY);}catch(_){}
+      const r=await prevCall.apply(this,arguments); pc=null;try{sessionStorage.removeItem(PC_KEY);}catch(_){} return r;
+    }
+    return prevCall.apply(this,arguments);
+  };
 
   /* ===== Tab Agenda HR ===== */
   const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
