@@ -5094,6 +5094,7 @@ async function confirmHrisFullResetV1(){
     if(!res||res.ok!==true){showToast('❌ Agenda gagal disimpan: '+(res?.message||res?.error||'coba lagi'));return;}
     (res.items||[]).slice().reverse().forEach(it=>{state.agendas.unshift({id:Number(it.id),title:it.title,date:it.date,time:it.time,location:it.location,xpBonus:Number(it.xp_bonus)||0,hrXpBonus:0,scope:'company',teamLeaderNik:'',creatorNik:String(me().nik)});});
     saveAgendas();
+    document.getElementById('agendaSheetV12')?.remove();
     showToast('🎉 '+(res.items?.length||1)+' Agenda Perusahaan berhasil dibuat & diberitahukan ke anggota/Leader.');
     renderAgendaTab();
   };
@@ -5224,5 +5225,157 @@ async function confirmHrisFullResetV1(){
     return {alpha,missingCheckout,xpLost:Math.abs(rows.reduce((s,r)=>s+(Number(r.xpEarned)||0),0)),rows:rows.map(r=>({date:r.date,type:r.statusText,xpDelta:r.xpEarned,reason:'Ditetapkan server berdasarkan roster.'}))};
   };
   try{localStorage.removeItem('attendance_penalties_v6');}catch(_){} // bersihkan Alpha lokal lama yang salah (L/SKT/CT)
+})();
+</script>
+<style id="v12-style">
+.v12-grp-title{display:flex;align-items:center;gap:6px;margin:16px 2px 7px;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim,#64748b)}
+.v12-grp{display:flex;flex-direction:column;gap:6px}
+.v12-grp .home-tile{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:10px 12px;position:relative}
+.v12-grp .home-tile .icon{font-size:18px;margin:0;width:30px;height:30px;flex:0 0 30px;display:flex;align-items:center;justify-content:center;background:#f1f5f9;border-radius:9px}
+.v12-grp .home-tile .title{font-size:12.5px;font-weight:700}
+.v12-grp .home-tile .desc{font-size:10px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.v12-grp .home-tile .v12-body{min-width:0;flex:1}
+.v12-grp .home-tile::after{content:'›';font-size:18px;color:#cbd5e1;margin-left:4px}
+.v12-grp .home-tile .notify{position:static;margin-left:auto;flex:0 0 auto}
+.v12-grp .home-tile.v12-danger{border-color:#fecaca;background:#fff7f7}
+.v12-grp .home-tile.v12-danger .icon{background:#fee2e2}
+.ag12-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.ag12-head h2{margin:0;font-size:15px}
+.ag12-chips{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.ag12-chip{font-size:10.5px;font-weight:700;padding:5px 9px;border-radius:99px;background:#f1f5f9;color:#475569}
+.ag12-chip.now{background:#dcfce7;color:#166534}.ag12-chip.soon{background:#dbeafe;color:#1e40af}
+.ag12-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.ag12-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.ag12-title{font-size:12.5px;font-weight:800;line-height:1.3}
+.ag12-meta{font-size:10.5px;color:#64748b;margin-top:4px;line-height:1.5}
+.ag12-badge{font-size:9.5px;font-weight:800;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.ag12-b-now{background:#dcfce7;color:#166534}.ag12-b-soon{background:#dbeafe;color:#1e40af}.ag12-b-done{background:#e2e8f0;color:#475569}
+.ag12-att{display:flex;gap:10px;margin-top:8px;font-size:10.5px;font-weight:700}
+.ag12-att .y{color:#059669}.ag12-att .n{color:#dc2626}.ag12-att .w{color:#94a3b8}
+.ag12-bar{height:5px;background:#e2e8f0;border-radius:9px;overflow:hidden;margin-top:6px;display:flex}
+.ag12-bar i{display:block;height:100%}
+.ag12-actions{display:flex;gap:6px;margin-top:9px;border-top:1px solid #f1f5f9;padding-top:8px}
+.ag12-actions button{font-size:10.5px;font-weight:700;padding:6px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;color:#334155}
+.ag12-actions button.del{color:#dc2626;border-color:#fecaca}
+.ag12-group{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin:14px 2px 7px}
+details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-weight:800;color:#475569;cursor:pointer;padding:8px 2px}
+.ag12-sheet-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:99998;display:flex;align-items:flex-end;justify-content:center}
+.ag12-sheet{background:#fff;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px 16px 22px;max-height:92vh;overflow:auto;animation:ag12up .18s ease-out}
+@keyframes ag12up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+.ag12-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ag12-xp{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
+.ag12-xp button{flex:1;min-width:52px;padding:8px 0;border-radius:9px;border:1px solid #cbd5e1;background:#fff;font-weight:700;font-size:11px}
+.ag12-xp button.on{background:#2563eb;border-color:#2563eb;color:#fff}
+.ag12-link{background:none;border:0;color:#2563eb;font-size:11px;font-weight:700;padding:4px 0;margin:2px 0 6px}
+</style>
+<script id="v12-hr-ui">
+(function(){
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const isHR=()=>String(state.activeProfile?.role||'').toLowerCase()==='hr';
+
+  /* ===== Beranda HR: kelompokkan menu ===== */
+  const GROUPS=[
+    ['Tindakan harian',['Pemeriksaan Absensi','Ide & Kontribusi','Catatan Leader','Tinjau Koreksi Absensi']],
+    ['Tim & kinerja',['Detail Performa','Laporan Bulanan','Kehadiran Saya','Skor & Penyebab']],
+    ['Komunikasi',['Agenda & Broadcast','Pesan Pribadi']],
+    ['Administrasi',['Kelola Pengguna','Koreksi XP','Menu Reset Data']]
+  ];
+  function regroupHome(){
+    const c=document.getElementById('content'); if(!c) return;
+    const grids=[...c.querySelectorAll('.home-grid')]; if(!grids.length||c.querySelector('.v12-grp')) return;
+    const tiles=grids.flatMap(g=>[...g.querySelectorAll(':scope > .home-tile')]);
+    if(tiles.length<3) return;
+    const titleOf=t=>(t.querySelector('.title')?.textContent||'').trim();
+    if(!tiles.some(t=>titleOf(t)==='Pesan Pribadi')){
+      const b=document.createElement('button'); b.className='home-tile';
+      b.innerHTML='<div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim pesan ke satu, beberapa, atau semua karyawan.</div>';
+      b.onclick=()=>renderHRMessagesPage(); tiles.push(b);
+    }
+    const used=new Set(), wrap=document.createElement('div');
+    const mk=(name,list,extraCls)=>{
+      if(!list.length) return;
+      wrap.insertAdjacentHTML('beforeend',`<div class="v12-grp-title">${esc(name)}</div>`);
+      const g=document.createElement('div'); g.className='v12-grp';
+      list.forEach(t=>{
+        const icon=t.querySelector('.icon'),ttl=t.querySelector('.title'),desc=t.querySelector('.desc'),badge=t.querySelector('.notify');
+        const body=document.createElement('div'); body.className='v12-body'; if(ttl)body.appendChild(ttl); if(desc)body.appendChild(desc);
+        t.innerHTML=''; if(icon)t.appendChild(icon); t.appendChild(body); if(badge)t.appendChild(badge);
+        if(titleOf(t)==='Menu Reset Data'||/Reset/.test(titleOf(t))) t.classList.add('v12-danger');
+        g.appendChild(t);
+      }); wrap.appendChild(g);
+    };
+    const byTitle=new Map(); tiles.forEach(t=>{if(!byTitle.has(titleOf(t)))byTitle.set(titleOf(t),t);});
+    const rest=[];
+    GROUPS.forEach(([name,titles],gi)=>{
+      const list=titles.map(x=>byTitle.get(x)).filter(Boolean); list.forEach(t=>used.add(t));
+      if(name==='Administrasi'){ // "Lainnya" disisipkan sebelum Administrasi; Reset Data selalu terakhir
+        const others=[...byTitle.values()].filter(t=>!used.has(t)); others.forEach(t=>used.add(t)); mk('Lainnya',others);
+        list.sort((a,b)=>(/Reset/.test(titleOf(a))?1:0)-(/Reset/.test(titleOf(b))?1:0));
+      }
+      mk(name,list);
+    });
+    // buang grid & judul bagian lama, tempatkan susunan baru di posisi grid pertama
+    const anchor=grids[0]; const oldTitles=grids.map(g=>g.previousElementSibling).filter(p=>p&&p.classList.contains('home-section-title'));
+    anchor.parentNode.insertBefore(wrap,anchor);
+    oldTitles.forEach(p=>p.remove()); grids.forEach(g=>g.remove());
+    c.querySelectorAll('.home-section-title').forEach(el=>{if(!el.nextElementSibling)el.remove();});
+  }
+  const prevDash=window.renderHRDashboard;
+  window.renderHRDashboard=function(){const r=prevDash.apply(this,arguments);try{if(isHR())regroupHome();}catch(e){console.warn('v12 regroup',e);}return r;};
+
+  /* ===== Tab Agenda HR ===== */
+  const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  const dkey=a=>String(a.date||'').slice(0,10);
+  const fmt=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'});}catch(_){return d;}};
+  function attendance(a){
+    initUsers(); const users=state.allUsers.filter(u=>u.role!=='hr'&&u.active!==false);
+    let st={}; try{st=state.agendaUserStatus||JSON.parse(localStorage.getItem('agenda_user_status_all')||'{}');}catch(_){}
+    let y=0,n=0; users.forEach(u=>{const s=st[String(a.id)+'_'+u.nik]; if(s?.status==='mengikuti')y++; else if(s?.status==='tidak')n++;});
+    return {y,n,w:Math.max(0,users.length-y-n),total:users.length};
+  }
+  function card(a,done){
+    const t=today(),d=dkey(a),badge=d<t?['done','Selesai']:d===t?['now','Hari ini']:['soon','Akan datang'],at=attendance(a);
+    const pct=x=>at.total?Math.round(x/at.total*100):0;
+    return `<div class="ag12-card"><div class="ag12-top"><div><div class="ag12-title">${esc(a.title)}</div><div class="ag12-meta">📅 ${esc(fmt(d))} • ⏰ ${esc(a.time)}<br>📍 ${esc(a.location)} • ⭐ +${Number(a.xpBonus)||0} XP</div></div><span class="ag12-badge ag12-b-${badge[0]}">${badge[1]}</span></div>
+    <div class="ag12-att"><span class="y">✔ ${at.y} ikut</span><span class="n">✖ ${at.n} tidak</span><span class="w">… ${at.w} belum</span></div>
+    <div class="ag12-bar"><i style="width:${pct(at.y)}%;background:#22c55e"></i><i style="width:${pct(at.n)}%;background:#ef4444"></i></div>
+    <div class="ag12-actions"><button onclick="hrEditAgendaV11('${esc(a.id)}')">✏️ Edit</button><button class="del" onclick="hrDeleteAgendaV11('${esc(a.id)}')">🗑️ Hapus</button></div></div>`;
+  }
+  function renderHRAgenda(container){
+    const t=today(), addDays=(d,n)=>{const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return x.toLocaleDateString('en-CA');};
+    const all=(state.agendas||[]).filter(a=>(a.scope||'company')==='company'), asc=(a,b)=>dkey(a).localeCompare(dkey(b));
+    const todayL=all.filter(a=>dkey(a)===t).sort(asc), weekL=all.filter(a=>dkey(a)>t&&dkey(a)<=addDays(t,7)).sort(asc), laterL=all.filter(a=>dkey(a)>addDays(t,7)).sort(asc), doneL=all.filter(a=>dkey(a)<t).sort((a,b)=>asc(b,a));
+    const grp=(name,l)=>l.length?`<div class="ag12-group">${name}</div>${l.map(a=>card(a)).join('')}`:'';
+    const leaderAg=(state.agendas||[]).filter(a=>a.scope==='team');
+    const leaderHtml=leaderAg.length?`<details class="ag12-fold"><summary>👥 Agenda Tim dari Leader — Reward HR (${leaderAg.length})</summary>${leaderAg.map(a=>`<div class="ag12-card"><div class="ag12-title">${esc(a.title)}</div><div class="ag12-meta">📅 ${esc(fmt(dkey(a)))} • ⏰ ${esc(a.time)} • 📍 ${esc(a.location)}</div>${a.hrXpBonus?`<div style="margin-top:8px;padding:7px 9px;background:#ecfdf5;border-radius:8px;color:#047857;font-size:10.5px;font-weight:800">✅ Reward ditetapkan: +${a.hrXpBonus} XP</div>`:`<div style="display:flex;gap:7px;align-items:center;margin-top:8px"><select id="hrTeamXp_${esc(a.id)}" style="margin:0;flex:1">${v5XpOptions(30)}</select><button class="btn success" style="width:auto;padding:9px 12px;margin:0;font-size:10.5px" onclick="hrSetTeamAgendaXp(${Number(a.id)})">⭐ Tetapkan XP</button></div>`}</div>`).join('')}</details>`:'';
+    container.innerHTML=`<div class="ag12-head"><h2>Agenda Perusahaan</h2><button class="btn" style="width:auto;margin:0;padding:9px 14px;font-size:11.5px" onclick="hrOpenAgendaSheetV12()">＋ Buat Agenda</button></div>
+    <div class="ag12-chips"><span class="ag12-chip now">Hari ini: ${todayL.length}</span><span class="ag12-chip soon">7 hari ke depan: ${weekL.length}</span><span class="ag12-chip">Mendatang: ${laterL.length}</span><span class="ag12-chip">Selesai: ${doneL.length}</span></div>
+    ${grp('Hari ini',todayL)}${grp('Minggu ini',weekL)}${grp('Mendatang',laterL)}
+    ${(todayL.length+weekL.length+laterL.length)?'':'<div class="empty">Belum ada agenda yang akan datang. Ketuk “＋ Buat Agenda”.</div>'}
+    ${doneL.length?`<details class="ag12-fold"><summary>🗂️ Riwayat agenda selesai (${doneL.length})</summary>${doneL.map(a=>card(a,true)).join('')}</details>`:''}
+    ${leaderHtml}`;
+  }
+  window.hrOpenAgendaSheetV12=function(){
+    document.getElementById('agendaSheetV12')?.remove();
+    const bg=document.createElement('div'); bg.id='agendaSheetV12'; bg.className='ag12-sheet-bg';
+    bg.onclick=e=>{if(e.target===bg)bg.remove();};
+    bg.innerHTML=`<div class="ag12-sheet"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><strong style="font-size:14px">📅 Buat Agenda Perusahaan</strong><button onclick="document.getElementById('agendaSheetV12').remove()" style="border:0;background:none;font-size:20px;color:#64748b">×</button></div>
+    <label>Judul</label><input id="hrAgendaTitle" placeholder="cth. Briefing Q4 & Evaluasi CX">
+    <div class="ag12-row"><div><label>Tanggal</label><input type="date" id="hrAgendaDate"></div><div><label>Waktu</label><input id="hrAgendaTime" placeholder="09:00 WIB"></div></div>
+    <div id="ag12Date2Wrap" style="display:none"><label>Tanggal ke-2 (agenda yang sama)</label><input type="date" id="hrAgendaDate2"></div>
+    <button class="ag12-link" id="ag12AddDate" onclick="this.style.display='none';document.getElementById('ag12Date2Wrap').style.display='block'">＋ Tambah tanggal lain</button>
+    <label>Lokasi / Media</label><input id="hrAgendaLoc" placeholder="Kantor Pusat / Google Meet">
+    <label>Bonus XP kehadiran</label><input type="hidden" id="hrAgendaXp" value="50"><div class="ag12-xp">${[10,30,50,70,100].map(v=>`<button type="button" class="${v===50?'on':''}" onclick="document.getElementById('hrAgendaXp').value=${v};this.parentNode.querySelectorAll('button').forEach(b=>b.classList.remove('on'));this.classList.add('on')">+${v}</button>`).join('')}</div>
+    <div style="font-size:10.5px;color:#64748b;margin-bottom:10px">🔔 Anggota & Leader otomatis diberi notifikasi. Tanggal ke-2 dibuat sebagai agenda terpisah.</div>
+    <button class="btn" onclick="submitCreateAgendaByHR()">📅 Publish Agenda</button></div>`;
+    document.body.appendChild(bg);
+  };
+  const prevSub=window.renderAgendaSubTabContent;
+  window.renderAgendaSubTabContent=function(){
+    if(isHR()&&(state.agendaSubTab||'agenda')==='agenda'){
+      const c=document.getElementById('agendaSubTabContent'); if(c){try{renderHRAgenda(c);return;}catch(e){console.warn('v12 agenda',e);}}
+    }
+    return prevSub.apply(this,arguments);
+  };
 })();
 </script>
