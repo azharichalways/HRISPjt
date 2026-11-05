@@ -268,6 +268,7 @@
   .role-karyawan { background: #e0e7ff; color: #3730a3; }
   .role-leader { background: #fef3c7; color: #92400e; }
   .role-hr { background: #fce7f3; color: #9d174d; }
+  .role-manajemen { background: #e0e7ff; color: #3730a3; }
 
   .empty { text-align: center; padding: 30px 10px; color: var(--text-dim); font-size: 12px; }
 
@@ -794,6 +795,7 @@ function initData() {
   const activeSession = sessionStorage.getItem('active_user_session');
   if (activeSession && sessionStorage.getItem('ag_session_token')) {
     const user = JSON.parse(activeSession);
+    if (user && user.role === 'manajemen') { location.replace('dashboard.html'); return; }
     const found = state.allUsers.find(u => u.nik === user.nik) || user;
     state.activeProfile = found;
     loadUserData();
@@ -864,6 +866,8 @@ async function loginUser() {
   state.activeProfile=res.user;
   sessionStorage.setItem('ag_session_token',res.token);
   sessionStorage.setItem('active_user_session',JSON.stringify(res.user));
+  // Akun Manajemen tidak memakai aplikasi absensi: langsung ke dashboard hanya-baca (sesi yang sama dipakai ulang).
+  if(res.user.role==='manajemen'){location.href='dashboard.html';return;}
 
   // FAST LOGIN: layar utama tampil sekarang. Tidak menunggu bootstrap/notifikasi.
   // Notifikasi tidak memakai cache role lama; badge resmi dirender sesudah snapshot server selesai.
@@ -1342,7 +1346,7 @@ function capturePhotoAndAbsen() {
 }
 
 function roleLabel(role) {
-  return { karyawan: 'Anggota Tim', leader: 'Leader', hr: 'HR Admin' }[role] || role;
+  return { karyawan: 'Anggota Tim', leader: 'Leader', hr: 'HR Admin', manajemen: 'Manajemen' }[role] || role;
 }
 
 function timeToMinutes(str) {
@@ -2265,6 +2269,7 @@ function renderHRSubTabContent() {
           <option value="leader">Leader (Wajib Dibuat Pertama)</option>
           <option value="karyawan">Anggota Tim</option>
           <option value="hr">HR Admin</option>
+          <option value="manajemen">Manajemen (dashboard hanya-baca)</option>
         </select>
 
         <div id="leaderSelectionGroup" style="margin-bottom:10px; display:none;">
@@ -2294,7 +2299,7 @@ function renderHRSubTabContent() {
           </div>
           <div style="flex:1;">
             <label>Password (2 Karakter)</label>
-            <input id="hrPass" maxlength="2" class="mono" placeholder="12">
+            <input id="hrPass" maxlength="32" class="mono" placeholder="12 (Manajemen: min. 6)">
           </div>
         </div>
 
@@ -2375,8 +2380,8 @@ async function hrAddEmployee() {
     showToast('⚠️ Kode Unik harus berupa 3 digit angka!');
     return;
   }
-  if (passCode.length !== 2) {
-    showToast('⚠️ Password harus terdiri dari 2 karakter!');
+  if (role === 'manajemen' ? passCode.length < 6 : passCode.length !== 2) {
+    showToast(role === 'manajemen' ? '⚠️ Password akun Manajemen minimal 6 karakter!' : '⚠️ Password harus terdiri dari 2 karakter!');
     return;
   }
 
@@ -2455,6 +2460,7 @@ function hrEditUser(nik) {
         <option value="karyawan" ${u.role==='karyawan'?'selected':''}>Anggota Tim</option>
         <option value="leader" ${u.role==='leader'?'selected':''}>Leader</option>
         <option value="hr" ${u.role==='hr'?'selected':''}>HR Admin</option>
+        <option value="manajemen" ${u.role==='manajemen'?'selected':''}>Manajemen (dashboard hanya-baca)</option>
       </select>
       <div id="editLeaderGroup" style="margin-bottom:10px; display:${u.role==='karyawan'?'block':'none'};">
         <label style="color:var(--brand-primary); font-weight:700;">📌 Leader Penanggung Jawab</label>
@@ -2465,7 +2471,7 @@ function hrEditUser(nik) {
       <label>Kode Unik (3 Angka)</label>
       <input id="editKode" maxlength="3" class="mono" value="${u.kodeUnik}">
       <label>Password Baru <span style="font-weight:400; color:#94a3b8;">(kosongkan jika tidak diganti)</span></label>
-      <input id="editPass" maxlength="2" class="mono" placeholder="••">
+      <input id="editPass" maxlength="32" class="mono" placeholder="•• (Manajemen: min. 6)">
       <div style="display:flex; gap:8px; margin-top:6px;">
         <button class="btn" style="margin:0;" onclick="hrSaveEditedUser('${u.nik}')">💾 Simpan Perubahan</button>
         <button class="btn secondary" style="margin:0;" onclick="document.getElementById('hrEditUserSlot').innerHTML=''">Batal</button>
@@ -2497,7 +2503,7 @@ async function hrSaveEditedUser(nik) {
 
   if (!nama || !brand || !kodeUnik) { showToast('⚠️ Nama, brand, dan Kode Unik wajib diisi.'); return; }
   if (kodeUnik.length !== 3 || !/^\d{3}$/.test(kodeUnik)) { showToast('⚠️ Kode Unik harus 3 digit angka.'); return; }
-  if (passCode && passCode.length !== 2) { showToast('⚠️ Password baru harus 2 karakter (atau kosongkan).'); return; }
+  { const _r = (document.getElementById('editRole')||{}).value; if (passCode && (_r === 'manajemen' ? passCode.length < 6 : passCode.length !== 2)) { showToast(_r === 'manajemen' ? '⚠️ Password Manajemen minimal 6 karakter (atau kosongkan).' : '⚠️ Password baru harus 2 karakter (atau kosongkan).'); return; } }
   if (role === 'karyawan' && !leaderNik) { showToast('⚠️ Wajib memilih Leader penanggung jawab untuk Anggota Tim.'); return; }
   if (state.allUsers.some(x => x.nik !== nik && String(x.kodeUnik) === String(kodeUnik))) {
     showToast('⚠️ Kode Unik ini sudah dipakai akun lain.'); return;
