@@ -58,7 +58,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
 .donut>.hole{position:absolute;inset:24px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .hdr{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;justify-content:space-between;padding:12px 18px;border-radius:16px;background:linear-gradient(120deg,#DCE8FB 0%,#E6EEFB 45%,#E9F5F0 100%);border:1px solid #CFDDF3}
 .chip{display:flex;align-items:center;gap:7px;padding:6px 11px;background:#fff;border:1px solid #CFDDF3;border-radius:10px;font-size:12px;color:var(--mut);min-height:34px}
-.note{padding:9px 14px;border-radius:10px;background:#EAF1FE;color:var(--infot);font-size:12.5px;font-weight:600;cursor:pointer}
+.note{padding:7px 12px;border-radius:10px;background:#EAF1FE;color:var(--infot);font-size:12px;font-weight:600;cursor:pointer}
+.note summary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .banner{padding:9px 14px;border-radius:10px;background:#FFF2DC;color:var(--warnt);font-size:12.5px;font-weight:600}
 .err{padding:9px 14px;border-radius:10px;background:#FDECEA;color:var(--badt);font-size:12.5px;font-weight:600}
 /* panel tim */
@@ -80,7 +81,51 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
 #login label{font-size:13px;font-weight:600;color:var(--mut)}
 #login input{font-size:16px;padding:12px 14px;border:1px solid #C9D7EC;border-radius:12px;min-height:44px;width:100%}
 .hide{display:none!important}
-@media (max-width:640px){.wrap{padding:10px 10px 24px}.kpi .num{font-size:24px}.pill,.btn,.date{min-height:40px}.dgrid{grid-template-columns:1fr}}
+.ovwrap{position:relative}
+#drill{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:45}
+#drill .card{max-height:min(62vh,470px);overflow:auto;box-shadow:0 14px 34px rgba(27,43,75,.20)}
+.kpi{cursor:pointer;transition:box-shadow .12s}
+.kpi:hover{box-shadow:0 6px 18px rgba(27,43,75,.14)}
+.ibtn{display:inline-flex;align-items:center;gap:6px}
+.ibtn svg{width:16px;height:16px;flex:0 0 16px}
+.hbtns{flex-wrap:nowrap}
+/* kalender rentang tanggal */
+.rpwrap{position:relative;display:inline-block}
+.rp{position:absolute;top:calc(100% + 6px);left:0;z-index:55;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 34px rgba(27,43,75,.2);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.cals{display:flex;gap:20px}
+.cal{width:224px}
+.calh{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:13px;height:30px;margin-bottom:2px}
+.calh button{background:none;border:0;width:30px;height:30px;border-radius:8px;font-size:16px;line-height:1}
+.calh button:disabled{opacity:.3;cursor:default}
+.calh .sp{width:30px;height:30px}
+.calg{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
+.calg .w{font-size:11px;font-weight:700;color:var(--mut2);padding:4px 0}
+.calg button{height:30px;border:0;background:none;font-size:12.5px;font-variant-numeric:tabular-nums;border-radius:0}
+.calg button:not(:disabled):hover{background:#DCE5FC}
+.calg button.in{background:#E7EEFB}
+.calg button.s{background:var(--pri);color:#fff;font-weight:700}
+.calg button.s.a{border-radius:8px 0 0 8px}.calg button.s.b{border-radius:0 8px 8px 0}.calg button.s.a.b{border-radius:8px}
+.calg button.t:not(.s){box-shadow:inset 0 0 0 1.5px #9DB4F5;border-radius:8px}
+.calg button:disabled{color:#B5BFD1;cursor:default}
+.calf{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line2);padding-top:8px;flex-wrap:wrap}
+.iit{padding:6px 2px;border-top:1px solid #EEF2F8;min-width:0}
+.iit .t{font-size:12.5px;font-weight:700}
+@media (max-width:640px){
+  .wrap{padding:8px 8px 22px;gap:10px}.kpi .num{font-size:24px}.pill,.btn{min-height:38px}.dgrid{grid-template-columns:1fr}
+  .lab{display:none}
+  .hdr{padding:8px 10px;gap:6px}
+  .hdr h1{font-size:15px!important}.hdr .brand{font-size:9px!important}
+  .hbtns{gap:6px;width:100%}
+  .hbtns .chip{padding:4px 9px;min-height:36px}.hbtns .btn{padding:4px 10px;min-height:36px}
+  .hbtns .chip.ro{margin-left:auto}
+  #filters{flex-wrap:nowrap;gap:6px}
+  #filters .pill{padding:5px 10px;font-size:12px;max-width:52vw;overflow:hidden;text-overflow:ellipsis}
+  .cal:first-child{display:none}
+  .cal{width:min(268px,calc(100vw - 48px))}
+  .rp{max-width:calc(100vw - 16px)}
+  .ddwrap.r .dd{left:auto;right:0}
+  .kpi{padding:8px 10px;flex:1 1 140px}
+}
 </style>
 </head>
 <body>
@@ -103,24 +148,23 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
 <!-- ============ DASHBOARD ============ -->
 <div id="app" class="wrap hide">
   <div class="hdr">
-    <div style="display:flex;flex-direction:column;gap:2px">
-      <div class="small" style="font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--infot)">PT Putra Jaya Telesindo</div>
+    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+      <div class="small brand" style="font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--infot)">PT Putra Jaya Telesindo</div>
       <h1 style="margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em">Dashboard Manajemen Absensi</h1>
     </div>
-    <div class="tool">
-      <div class="chip"><span id="liveDot" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span><span id="stamp">Memuat…</span></div>
-      <div class="chip" style="background:#E3F4EC;border-color:#BFE3D0;color:var(--okt);font-weight:700">Hanya-baca</div>
-      <button class="btn" id="btnReload" type="button">Muat ulang</button>
-      <button class="btn pri" id="btnCsv" type="button">Ekspor CSV</button>
-      <button class="btn" id="btnOut" type="button">Keluar</button>
+    <div class="tool hbtns">
+      <div class="chip" title="Waktu perhitungan terakhir (otomatis tiap 10 menit)"><span id="liveDot" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span><span id="stamp">Memuat…</span></div>
+      <div class="chip ro" title="Hanya-baca: dashboard ini tidak dapat mengubah data" style="background:#E3F4EC;border-color:#BFE3D0;color:var(--okt);font-weight:700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lab">Hanya-baca</span></div>
+      <button class="btn ibtn" id="btnReload" type="button" title="Muat ulang" aria-label="Muat ulang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="lab">Muat ulang</span></button>
+      <button class="btn pri ibtn" id="btnCsv" type="button" title="Ekspor CSV" aria-label="Ekspor CSV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></svg><span class="lab">Ekspor CSV</span></button>
+      <button class="btn ibtn" id="btnOut" type="button" title="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg><span class="lab">Keluar</span></button>
     </div>
   </div>
 
   <div id="msg"></div>
 
   <div id="filters" class="tool"></div>
-  <div id="kpis" class="row"></div>
-  <div id="drill"></div>
+  <div class="ovwrap"><div id="kpis" class="row"></div><div id="drill"></div></div>
 
   <div class="row">
     <div class="card" style="flex:1 1 360px">
@@ -130,7 +174,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
           <div class="hole"><div id="donutCenter" style="font-size:24px;font-weight:800;color:var(--okt);letter-spacing:-.02em"></div><div style="font-size:11px;color:var(--mut);font-weight:600">tepat waktu</div></div></div>
         <div id="legend" style="flex:1 1 170px;display:flex;flex-direction:column;gap:2px"></div>
       </div>
-      <div class="small">Klik baris untuk melihat daftar nama.</div>
+      <div class="small">Arahkan kursor ke kartu angka (atau klik baris) untuk melihat daftar nama.</div>
     </div>
 
     <div class="card" style="flex:2 1 520px">
@@ -167,6 +211,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
           <div class="hole" style="inset:20px"><div id="ideaTotal" style="font-size:22px;font-weight:800"></div><div style="font-size:10.5px;color:var(--mut);font-weight:600">ide</div></div></div>
         <div id="ideaLeg" style="flex:1 1 140px;display:flex;flex-direction:column;gap:5px;font-size:12.5px"></div>
       </div>
+      <div id="ideaList"></div>
       <div class="small" style="border-top:1px solid var(--line2);padding-top:8px">Kontribusi positif disetujui bulan ini: <b id="gd" style="color:var(--ink)"></b></div>
     </div>
     <div class="card" style="flex:1 1 320px"><h2 class="h2">Agenda perusahaan · konfirmasi</h2><div id="agenda" style="display:flex;flex-direction:column;gap:10px"></div></div>
@@ -213,7 +258,8 @@ const SEG = [
 const PRESETS = [['h','Hari ini'],['w','7 hari'],['m','30 hari']];
 const METRICS = [['tepat','Tepat waktu','#2FA36B'],['terlambat','Terlambat','#F0A23B'],['alpha','Alpha','#E5584B']];
 
-const S = { data:null, preset:'c', from:'', to:'', teams:[], tpOpen:false, tSort:'az', barsOpen:true, metric:'tepat', drill:null, drillAll:false, sort:'xp', dir:-1, rankAll:false, timer:null, loading:false, C:null };
+const UNC = { label:'Belum terhitung hari ini', fill:'#9AA7BD', text:'#5B6880' };
+const S = { data:null, preset:'c', from:'', to:'', rp:{ open:false, vm:'', a:'', b:'', step:0 }, hov:null, idea:null, teams:[], tpOpen:false, tSort:'az', barsOpen:true, metric:'tepat', drill:null, drillAll:false, sort:'xp', dir:-1, rankAll:false, timer:null, loading:false, C:null };
 
 /* ====== PENGAMBILAN DATA ====== */
 async function load(){
@@ -233,10 +279,11 @@ async function load(){
   if (!S.from) applyPreset('h'); else applyPreset('c');
   const ns = res.noSchedule || [];
   $('msg').innerHTML = (res.holiday ? '<div class="banner">Hari ini hari libur nasional. Angka "belum presensi" tidak dihitung.</div>' : '') +
-    (ns.length ? '<details class="note"><summary>ℹ️ ' + ns.length + ' orang tidak ikut dihitung "belum presensi" karena jadwalnya tidak terbaca</summary><div class="small" style="padding-top:6px;line-height:1.5">Nama di akun kemungkinan berbeda dengan nama di tab jadwal bulan ini (atau nama ganda). Perbaiki namanya agar ikut terdeteksi: <b>' + ns.map(esc).join(', ') + '</b>. Jika orang ini tetap presensi, datanya tetap terhitung.</div></details>' : '') +
-    '<div class="small" style="padding:2px 4px">"Belum presensi" hanya dihitung setelah jam mulai shift (pagi 07.00, middle 13.00, sore 15.00, malam 23.00).</div>';
+    '<details class="note"><summary>ℹ️ Catatan perhitungan' + (ns.length ? ' · ' + ns.length + ' jadwal tidak terbaca' : '') + '</summary><div class="small" style="padding-top:6px;line-height:1.5">' +
+    '"Belum presensi" hanya dihitung setelah jam mulai shift (pagi 07.00, middle 13.00, sore 15.00, malam 23.00). Roster L/SKT/CT dan cuti disetujui dihitung sebagai libur/sakit/cuti. Orang yang shift-nya belum mulai atau jadwalnya tidak terbaca tampil di baris "Belum terhitung" pada diagram status (hari ini).' +
+    (ns.length ? '<br><b>Jadwal tidak terbaca</b> (nama di akun berbeda dengan tab jadwal bulan ini, atau nama ganda): <b>' + ns.map(esc).join(', ') + '</b>.' : '') + '</div></details>';
   const t = new Date(res.generatedAt);
-  $('stamp').textContent = 'Dihitung ' + (isNaN(t) ? '' : t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.')) + ' · otomatis tiap 10 menit';
+  $('stamp').innerHTML = '<span class="lab">Dihitung </span>' + (isNaN(t) ? '' : t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.')) + '<span class="lab"> · otomatis tiap 10 menit</span>';
   render();
 }
 function startPolling(){ clearInterval(S.timer); S.timer = setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS); }
@@ -302,18 +349,53 @@ function trendSeries(metric, t0, t1){
 function render(){
   if (!S.data) return;
   compute();
-  renderFilters(); renderTeamPanel(); renderKpis(); renderDrill(); renderDonut(); renderTrend(); renderTeams(); renderRank(); renderIdeas(); renderAgenda(); renderQueue();
+  renderFilters(); renderRangePanel(); renderTeamPanel(); renderKpis(); renderDrill(); renderDonut(); renderTrend(); renderTeams(); renderRank(); renderIdeas(); renderAgenda(); renderQueue();
 }
 const pill = (on, label, attr) => '<button type="button" class="pill' + (on ? ' on' : '') + '" ' + attr + '>' + esc(label) + '</button>';
 
+const BULAN_L = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const ymAdd = (ym, n) => { const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) - 1 + n, d = new Date(Date.UTC(y, m, 1)); return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2); };
+const dmy = d => d ? d.slice(8) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : '';
+function rangeLabel(){
+  const f = S.from, t = S.to;
+  return f === t ? dLong(t) : (f.slice(0, 4) === t.slice(0, 4) ? dLabel(f) : dLong(f)) + ' – ' + dLong(t);
+}
 function renderFilters(){
-  const D = S.data, lo = D.dates[0], hi = D.dates[D.dates.length - 1];
-  let h = '<span class="lbl">Periode</span>' +
-    '<input type="date" class="date" id="dFrom" value="' + S.from + '" min="' + lo + '" max="' + hi + '" aria-label="Dari tanggal">' +
-    '<span class="lbl">s/d</span>' +
-    '<input type="date" class="date" id="dTo" value="' + S.to + '" min="' + lo + '" max="' + hi + '" aria-label="Sampai tanggal">';
-  h += '<span class="lbl" style="margin-left:8px">Tim</span><span class="ddwrap"><button type="button" class="pill' + (S.teams.length ? ' on' : '') + '" data-act="tpanel" aria-haspopup="true" aria-expanded="' + S.tpOpen + '">' + esc(teamText()) + (S.teams.length ? '' : ' (' + D.teams.length + ')') + ' ' + (S.tpOpen ? '▴' : '▾') + '</button><div id="tpanel"></div></span>';
+  const D = S.data;
+  const h = '<span class="lbl lab">Periode</span><span class="rpwrap"><button type="button" class="pill" data-act="rp" aria-haspopup="true" aria-expanded="' + S.rp.open + '">📅 ' + esc(rangeLabel()) + ' ' + (S.rp.open ? '▴' : '▾') + '</button><div id="rpanel"></div></span>' +
+    '<span class="lbl lab" style="margin-left:8px">Tim</span><span class="ddwrap r"><button type="button" class="pill' + (S.teams.length ? ' on' : '') + '" data-act="tpanel" aria-haspopup="true" aria-expanded="' + S.tpOpen + '">' + esc(teamText()) + (S.teams.length ? '' : ' (' + D.teams.length + ')') + ' ' + (S.tpOpen ? '▴' : '▾') + '</button><div id="tpanel"></div></span>';
   $('filters').innerHTML = h;
+}
+function calHtml(ym, lo, hi, left, right){
+  const Y = Number(ym.slice(0, 4)), M = Number(ym.slice(5, 7)), dow = new Date(Date.UTC(Y, M - 1, 1)).getUTCDay(), dim = new Date(Date.UTC(Y, M, 0)).getUTCDate();
+  const R = S.rp, a = R.a, b = R.b || R.a, today = S.data.today;
+  let g = ['Mg','Sn','Sl','Rb','Km','Jm','Sb'].map(x => '<span class="w">' + x + '</span>').join('');
+  for (let i = 0; i < dow; i++) g += '<span></span>';
+  for (let d = 1; d <= dim; d++) {
+    const iso = ym + '-' + ('0' + d).slice(-2), off = iso < lo || iso > hi;
+    const sel = iso === a || iso === b, cls = [sel ? 's' : '', iso === a ? 'a' : '', iso === b ? 'b' : '', (!sel && iso > a && iso < b) ? 'in' : '', iso === today ? 't' : ''].filter(Boolean).join(' ');
+    g += '<button type="button" class="' + cls + '"' + (off ? ' disabled' : ' data-day="' + iso + '"') + '>' + d + '</button>';
+  }
+  return '<div class="cal"><div class="calh">' + (left ? '<button type="button" data-calnav="-1" aria-label="Bulan sebelumnya"' + (ym <= lo.slice(0, 7) ? ' disabled' : '') + '>‹</button>' : '<span class="sp"></span>') +
+    '<span>' + BULAN_L[M - 1] + ' ' + Y + '</span>' + (right ? '<button type="button" data-calnav="1" aria-label="Bulan berikutnya"' + (ym >= hi.slice(0, 7) ? ' disabled' : '') + '>›</button>' : '<span class="sp"></span>') + '</div><div class="calg">' + g + '</div></div>';
+}
+function renderRangePanel(){
+  const el = $('rpanel'); if (!el) return;
+  if (!S.rp.open) { el.innerHTML = ''; return; }
+  const D = S.data, lo = D.dates[0], hi = D.dates[D.dates.length - 1], R = S.rp, vm = R.vm;
+  el.innerHTML = '<div class="rp" role="dialog" aria-label="Pilih rentang tanggal"><div class="cals">' + calHtml(ymAdd(vm, -1), lo, hi, true, false) + calHtml(vm, lo, hi, false, true) + '</div>' +
+    '<div class="small" style="padding:0 2px">' + (R.step === 1 ? 'Pilih tanggal akhir.' : 'Pilih tanggal awal, lalu tanggal akhir (klik tanggal yang sama untuk satu hari).') + '</div>' +
+    '<div class="calf"><b style="font-size:12.5px">' + dmy(R.a) + ' – ' + dmy(R.b || R.a) + '</b><span class="tool" style="gap:6px"><button type="button" class="btn" data-act="rpCancel">Batal</button><button type="button" class="btn pri" data-act="rpApply">Terapkan</button></span></div></div>';
+}
+function openRange(){
+  const R = S.rp; R.open = true; R.a = S.from; R.b = S.to; R.step = 0; R.vm = S.to.slice(0, 7); S.tpOpen = false;
+  renderTeamPanel();
+}
+function pickDay(d){
+  const R = S.rp;
+  if (R.step === 0) { R.a = d; R.b = null; R.step = 1; }
+  else { if (d < R.a) { R.b = R.a; R.a = d; } else R.b = d; R.step = 0; }
+  renderRangePanel();
 }
 
 function sortedTeamIdx(){
@@ -340,15 +422,20 @@ function renderKpis(){
   let h = '';
   for (let i = 0; i < 4; i++) {
     const sg = SEG[i], on = S.drill === i;
-    h += '<button type="button" class="kpi' + (on ? ' on' : '') + '" data-drill="' + i + '" style="border-color:' + (on ? sg.fill : 'var(--line)') + ';border-top:4px solid ' + sg.fill + '">' +
-      '<span style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--mut)"><span style="width:9px;height:9px;border-radius:50%;background:' + sg.fill + ';display:inline-block"></span>' + sg.label + '</span>' +
-      '<span style="display:flex;align-items:baseline;gap:7px"><span class="num" style="color:' + sg.text + '">' + fmt(v[i]) + '</span><span class="sub">' + pctTxt(v[i], total) + ' ' + un + '</span></span>' +
-      '<span style="font-size:11px;font-weight:700;color:var(--infot)">' + (on ? 'Sembunyikan daftar' : 'Lihat daftar nama') + '</span></button>';
+    h += '<button type="button" class="kpi' + (on ? ' on' : '') + '" data-drill="' + i + '" title="Arahkan kursor untuk melihat daftar nama; klik untuk mempertahankan" style="border-color:' + (on ? sg.fill : 'var(--line)') + ';border-top:4px solid ' + sg.fill + '">' +
+      '<span style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--mut)"><span style="width:9px;height:9px;border-radius:50%;background:' + sg.fill + ';display:inline-block"></span>' + sg.label + (on ? ' <span title="Daftar dipertahankan" style="margin-left:auto">📌</span>' : '') + '</span>' +
+      '<span style="display:flex;align-items:baseline;gap:7px"><span class="num" style="color:' + sg.text + '">' + fmt(v[i]) + '</span><span class="sub">' + pctTxt(v[i], total) + ' ' + un + '</span></span></button>';
   }
   $('kpis').innerHTML = h;
 }
 
+function uncRows(){
+  const { i0, rows } = S.C, D = S.data;
+  return rows.filter(r => r.u.d.charAt(i0) === '-').map(r => ({ name: r.u.n, team: D.teams[r.u.t], detail: r.u.r || 'Belum ada data presensi', n: 1 })).sort((a, b) => a.name.localeCompare(b.name));
+}
+const uncOn = () => S.C.i0 === S.C.i1 && S.to === S.data.today;
 function drillRows(i){
+  if (i === 5) return uncRows();
   const { i0, i1, rows } = S.C, D = S.data, out = [], one = i0 === i1;
   rows.forEach(r => {
     const n = r.c[i]; if (!n) return;
@@ -367,12 +454,12 @@ function drillRows(i){
 }
 
 function renderDrill(){
-  const el = $('drill');
-  if (S.drill == null) { el.innerHTML = ''; return; }
-  const i = S.drill, rows = drillRows(i), v = S.C.tot, lim = 30, shown = S.drillAll ? rows : rows.slice(0, lim);
-  let h = '<div class="card" style="box-shadow:0 6px 20px rgba(59,91,219,.08)">' +
+  const el = $('drill'), pinned = S.drill != null, i = pinned ? S.drill : S.hov;
+  if (i == null || (i === 5 && !uncOn())) { el.innerHTML = ''; return; }
+  const rows = drillRows(i), v = S.C.tot, lim = 40, shown = S.drillAll ? rows : rows.slice(0, lim), sg = i === 5 ? UNC : SEG[i];
+  let h = '<div class="card" style="border-top:4px solid ' + sg.fill + '">' +
     '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">' +
-    '<div><div class="h2">' + SEG[i].label + ' · ' + fmt(v[i]) + ' ' + unit() + ' · ' + rows.length + ' orang</div><div class="sub">' + esc(scopeText()) + '</div></div>' +
+    '<div><div class="h2">' + sg.label + ' · ' + (i === 5 ? rows.length + ' orang' : fmt(v[i]) + ' ' + unit() + ' · ' + rows.length + ' orang') + '</div><div class="sub">' + esc(scopeText()) + (pinned ? '' : ' · klik kartu untuk mempertahankan') + '</div></div>' +
     '<div class="tool"><button class="btn" type="button" data-act="csvDrill">Ekspor daftar</button><button class="btn soft" type="button" data-act="closeDrill">Tutup</button></div></div>';
   h += shown.length ? '<div class="dgrid">' + shown.map(r => '<div class="dit"><span class="nm ell" title="' + esc(r.name) + '">' + esc(r.name) + '</span><span class="tm ell" title="' + esc(r.team) + '">' + esc(r.team) + '</span><span class="dt">' + esc(r.detail) + '</span></div>').join('') + '</div>' : '<div class="sub">Tidak ada data.</div>';
   if (rows.length > lim) h += '<button class="btn" type="button" data-act="toggleDrillAll" style="align-self:flex-start">' + (S.drillAll ? 'Tampilkan lebih sedikit' : 'Tampilkan semua (' + rows.length + ')') + '</button>';
@@ -385,7 +472,8 @@ function renderDonut(){
   $('donutRing').style.background = total ? 'conic-gradient(' + stops.join(',') + ')' : '#E3EAF4';
   $('donutCenter').textContent = pctTxt(v[0], work);
   $('donutSub').textContent = scopeText() + ' · satuan ' + unit();
-  $('legend').innerHTML = SEG.map((sg, i) => '<button type="button" class="leg' + (S.drill === i ? ' on' : '') + '" data-drill="' + i + '" style="' + (S.drill === i ? 'border-color:' + sg.fill : '') + '"><span class="dot" style="background:' + sg.fill + '"></span><span class="ell" style="flex:1;font-weight:600">' + sg.label + '</span><b>' + fmt(v[i]) + '</b><span class="small" style="width:46px;text-align:right">' + pctTxt(v[i], total) + '</span></button>').join('');
+  $('legend').innerHTML = SEG.map((sg, i) => '<button type="button" class="leg' + (S.drill === i ? ' on' : '') + '" data-drill="' + i + '" style="' + (S.drill === i ? 'border-color:' + sg.fill : '') + '"><span class="dot" style="background:' + sg.fill + '"></span><span class="ell" style="flex:1;font-weight:600">' + sg.label + '</span><b>' + fmt(v[i]) + '</b><span class="small" style="width:46px;text-align:right">' + pctTxt(v[i], total) + '</span></button>').join('') +
+    (uncOn() ? '<button type="button" class="leg' + (S.drill === 5 ? ' on' : '') + '" data-drill="5" title="Shift belum mulai atau jadwal tidak terbaca" style="margin-top:4px;border-top:1px dashed var(--line);border-radius:0 0 8px 8px"><span class="dot" style="background:' + UNC.fill + '"></span><span class="ell" style="flex:1;font-weight:600;color:var(--mut)">Belum terhitung</span><b>' + uncRows().length + '</b><span class="small" style="width:46px;text-align:right">orang</span></button>' : '');
 }
 
 function renderTrend(){
@@ -444,11 +532,20 @@ function renderRank(){
 
 const IDEA = [['Diajukan','#3B5BDB'],['Diteruskan Leader','#7C9BF0'],['Diterima / dikaji HR','#2FA36B'],['Diterapkan','#F0A23B'],['Ditolak','#9AA7BD']];
 function renderIdeas(){
-  const c = S.data.ideas.counts, total = c.reduce((a, b) => a + b, 0);
+  const c = S.data.ideas.counts, total = c.reduce((a, b) => a + b, 0), list = S.data.ideas.list || [];
   let acc = 0; const stops = IDEA.map((x, i) => { const a = acc; acc += total ? c[i] / total * 100 : 0; return x[1] + ' ' + a + '% ' + acc + '%'; });
   $('ideaRing').style.background = total ? 'conic-gradient(' + stops.join(',') + ')' : '#E3EAF4';
-  $('ideaTotal').textContent = total; $('ideaSub').textContent = 'Bulan ini · ' + total + ' ide';
-  $('ideaLeg').innerHTML = IDEA.map((x, i) => '<div style="display:flex;align-items:center;gap:7px"><span class="dot" style="background:' + x[1] + '"></span><span class="ell" style="flex:1">' + x[0] + '</span><b>' + c[i] + '</b></div>').join('');
+  $('ideaTotal').textContent = total; $('ideaSub').textContent = 'Bulan ini · ' + total + ' ide' + (total ? ' · klik status untuk melihat daftar' : '');
+  if (S.idea != null && !c[S.idea]) S.idea = null;
+  $('ideaLeg').innerHTML = IDEA.map((x, i) => '<button type="button" class="leg' + (S.idea === i ? ' on' : '') + '" ' + (c[i] ? 'data-idea="' + i + '"' : 'disabled style="opacity:.55;cursor:default"') + ' style="padding:3px 6px"><span class="dot" style="background:' + x[1] + '"></span><span class="ell" style="flex:1">' + x[0] + '</span><b>' + c[i] + '</b></button>').join('');
+  const L = $('ideaList');
+  if (S.idea == null) L.innerHTML = '';
+  else {
+    const items = list.filter(x => x.c === S.idea), more = c[S.idea] - items.length;
+    L.innerHTML = '<div style="border-top:1px solid var(--line2);padding-top:6px"><div class="small" style="font-weight:700;color:var(--ink);padding-bottom:2px">' + IDEA[S.idea][0] + ' · ' + c[S.idea] + ' ide</div>' +
+      items.map(x => '<div class="iit"><div class="t ell" title="' + esc(x.t) + '">' + esc(x.t || '(tanpa judul)') + '</div><div class="small ell">' + esc(x.n) + ' · ' + esc(x.d ? dLabel(x.d) : '') + (x.ds ? ' · ' + esc(x.ds) : '') + '</div></div>').join('') +
+      (more > 0 ? '<div class="small" style="padding-top:4px">+' + more + ' ide lainnya</div>' : '') + '</div>';
+  }
   $('gd').textContent = S.data.ideas.goodDeeds;
 }
 
@@ -480,30 +577,65 @@ function exportAll(){
   download('dashboard-' + S.from + '_' + S.to + '.csv', csv(rows));
 }
 function exportDrill(){
-  if (S.drill == null) return;
-  const rows = [['Nama','Tim','Keterangan']]; drillRows(S.drill).forEach(r => rows.push([r.name, r.team, r.detail]));
-  download(SEG[S.drill].label.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '-' + S.from + '_' + S.to + '.csv', csv(rows));
+  const k = S.drill != null ? S.drill : S.hov; if (k == null) return;
+  const rows = [['Nama','Tim','Keterangan']]; drillRows(k).forEach(r => rows.push([r.name, r.team, r.detail]));
+  download((k === 5 ? UNC : SEG[k]).label.replace(/[^a-z0-9]+/gi, '-').toLowerCase() + '-' + S.from + '_' + S.to + '.csv', csv(rows));
 }
 
 /* ====== EVENT ====== */
+const canHover = () => window.matchMedia && matchMedia('(hover:hover)').matches;
+function togglePin(i){
+  S.drill = S.drill === i ? null : i; S.drillAll = false;
+  S.hov = (S.drill === null && canHover()) ? i : null;   // mouse: tetap tampil sebagai pratinjau; layar sentuh: tertutup
+  renderKpis(); renderDrill(); renderDonut();
+}
+function closePanels(except){
+  let ch = false;
+  if (except !== 'tp' && S.tpOpen) { S.tpOpen = false; ch = true; }
+  if (except !== 'rp' && S.rp.open) { S.rp.open = false; ch = true; }
+  if (ch) { renderFilters(); renderTeamPanel(); renderRangePanel(); }
+}
 document.addEventListener('click', e => {
   if (S.tpOpen && !e.target.closest('.ddwrap')) { S.tpOpen = false; renderFilters(); renderTeamPanel(); }
-  const t = e.target.closest('button'); if (!t) return;
+  if (S.rp.open && !e.target.closest('.rpwrap')) { S.rp.open = false; renderFilters(); renderRangePanel(); }
+  if (S.hov != null && S.drill == null && !e.target.closest('.ovwrap')) { S.hov = null; renderDrill(); }
+  const t = e.target.closest('button'); if (!t || t.disabled) return;
   const ds = t.dataset;
-  if (ds.tsort) { S.tSort = ds.tsort; renderTeamPanel(); renderTeams(); }
+  if (ds.day) pickDay(ds.day);
+  else if (ds.calnav) { S.rp.vm = ymAdd(S.rp.vm, Number(ds.calnav)); renderRangePanel(); }
+  else if (ds.act === 'rp') { if (S.rp.open) S.rp.open = false; else openRange(); renderFilters(); renderRangePanel(); }
+  else if (ds.act === 'rpCancel') { S.rp.open = false; renderFilters(); renderRangePanel(); }
+  else if (ds.act === 'rpApply') { S.from = S.rp.a; S.to = S.rp.b || S.rp.a; S.preset = 'c'; S.rp.open = false; S.drillAll = false; S.hov = null; render(); }
+  else if (ds.tsort) { S.tSort = ds.tsort; renderTeamPanel(); renderTeams(); }
   else if (ds.bar !== undefined) { const i = Number(ds.bar); S.teams = (S.teams.length === 1 && S.teams[0] === i) ? [] : [i]; S.drillAll = false; render(); }
   else if (ds.metric) { S.metric = ds.metric; renderTrend(); }
-  else if (ds.drill !== undefined) { const i = Number(ds.drill); S.drill = S.drill === i ? null : i; S.drillAll = false; renderKpis(); renderDrill(); renderDonut(); if (S.drill != null) $('drill').scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+  else if (ds.drill !== undefined) togglePin(Number(ds.drill));
+  else if (ds.idea !== undefined) { const i = Number(ds.idea); S.idea = S.idea === i ? null : i; renderIdeas(); }
   else if (ds.sort) { if (S.sort === ds.sort) S.dir = -S.dir; else { S.sort = ds.sort; S.dir = ds.sort === 'n' ? 1 : -1; } renderRank(); }
-  else if (ds.act === 'tpanel') { S.tpOpen = !S.tpOpen; renderFilters(); renderTeamPanel(); }
+  else if (ds.act === 'tpanel') { const open = !S.tpOpen; S.rp.open = false; S.tpOpen = open; renderFilters(); renderRangePanel(); renderTeamPanel(); }
   else if (ds.act === 'tAll') { S.teams = []; render(); }
   else if (ds.act === 'toggleBars') { S.barsOpen = !S.barsOpen; renderTeams(); }
-  else if (ds.act === 'closeDrill') { S.drill = null; renderKpis(); renderDrill(); renderDonut(); }
+  else if (ds.act === 'closeDrill') { S.drill = null; S.hov = null; renderKpis(); renderDrill(); renderDonut(); }
   else if (ds.act === 'toggleDrillAll') { S.drillAll = !S.drillAll; renderDrill(); }
   else if (ds.act === 'csvDrill') exportDrill();
   else if (ds.act === 'rankAll') { S.rankAll = !S.rankAll; renderRank(); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tpOpen) { S.tpOpen = false; renderFilters(); renderTeamPanel(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (S.tpOpen || S.rp.open) closePanels(); else if (S.hov != null || S.drill != null) { S.hov = null; S.drill = null; renderKpis(); renderDrill(); renderDonut(); } } });
+// daftar nama muncul saat kursor di kartu angka, hilang saat kursor keluar (kecuali sudah diklik/dipertahankan)
+(function(){
+  const ov = document.querySelector('.ovwrap'); let timer = null;
+  ov.addEventListener('mouseover', e => {
+    if (!S.data || !canHover()) return;
+    const k = e.target.closest('.kpi');
+    if (k) { clearTimeout(timer); const i = Number(k.dataset.drill); if (S.hov !== i) { S.hov = i; S.drillAll = false; renderDrill(); } }
+    else if (e.target.closest('#drill')) clearTimeout(timer);
+  });
+  ov.addEventListener('mouseleave', () => {
+    if (!canHover()) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (S.hov != null) { S.hov = null; renderDrill(); } }, 220);
+  });
+})();
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset && el.dataset.tchk !== undefined) {
@@ -512,10 +644,6 @@ document.addEventListener('change', e => {
     S.teams.sort((a, b) => a - b); S.drillAll = false;
     const lst = document.querySelector('.ddlist'), st = lst ? lst.scrollTop : 0;
     render(); const l2 = document.querySelector('.ddlist'); if (l2) l2.scrollTop = st;
-  } else if (el.id === 'dFrom' || el.id === 'dTo') {
-    const f = $('dFrom').value, t = $('dTo').value;
-    if (!f || !t) return;
-    S.from = f; S.to = t; applyPreset('c'); S.drillAll = false; render();
   }
 });
 $('btnReload').onclick = () => load();
