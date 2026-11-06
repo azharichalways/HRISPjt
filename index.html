@@ -3235,7 +3235,7 @@ renderAgendaTab=function(){
   const c=document.getElementById('content'),role=state.activeProfile.role;let tabs='';
   if(role==='karyawan')tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda Saya</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button>`;
   else if(role==='leader')tabs=`<button class="subnav-btn ${state.agendaSubTab==='team'?'active':''}" onclick="switchAgendaSubTab('team')">👥 Agenda Tim</button><button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">🏢 Perusahaan</button>`;
-  else tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button><button class="subnav-btn ${state.agendaSubTab==='broadcast'?'active':''}" onclick="switchAgendaSubTab('broadcast')">📢 Broadcast</button><button class="subnav-btn ${state.agendaSubTab==='messages'?'active':''}" onclick="switchAgendaSubTab('messages')">📨 Pesan Pribadi</button>`;
+  else tabs=`<button class="subnav-btn ${state.agendaSubTab==='agenda'?'active':''}" onclick="switchAgendaSubTab('agenda')">📅 Agenda</button><button class="subnav-btn ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">🌟 Kegiatan</button><button class="subnav-btn ${state.agendaSubTab==='broadcast'?'active':''}" onclick="switchAgendaSubTab('broadcast')">📢 Broadcast</button>`;
   if(role==='leader'&&!['team','agenda'].includes(state.agendaSubTab))state.agendaSubTab='team';
   if(role==='karyawan'&&!['agenda','kegiatan'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
   if(role==='hr'&&!['agenda','kegiatan','broadcast','messages'].includes(state.agendaSubTab))state.agendaSubTab='agenda';
@@ -3405,7 +3405,7 @@ function v9GetHrAgendaItems(){
   const messages=(state.privateMessages||[]).filter(m=>m.fromNik===state.activeProfile.nik && v9MessageReminderDate(m)).map(m=>({
     key:'message_'+m.id,source:'message',title:m.subject||'Pesan Pribadi HR',date:v9MessageReminderDate(m),time:'',meta:`Untuk: ${m.toName||m.toNik}`,detail:m.text||'',id:m.id
   }));
-  return [...company,...messages].map(x=>({...x,done:!!state.hrAgendaDone[x.key]})).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  return [...company].map(x=>({...x,done:!!state.hrAgendaDone[x.key]})).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 }
 function v9ActiveHrAgendaItems(){ return v9GetHrAgendaItems().filter(x=>!x.done); }
 function v9MarkHrAgendaDone(key){ v9EnsureHrReminderStore(); state.hrAgendaDone[key]={doneAt:new Date().toISOString(),doneBy:state.activeProfile.nik};v9SaveHrReminderStore();if(GAS_URL) gasCall('setHrReminderDone', { key, nik: state.activeProfile.nik });showToast('✅ Pengingat Agenda HR ditandai selesai.');state.agendaSubTab='hragenda';renderAgendaTab(); }
@@ -3415,7 +3415,7 @@ function v9RenderHrAgenda(){
   v9EnsureHrReminderStore(); const container=document.getElementById('agendaSubTabContent'); if(!container)return;
   const all=v9GetHrAgendaItems(), active=all.filter(x=>!x.done), done=all.filter(x=>x.done), today=v9Today(), overdue=active.filter(x=>x.date<today).length, todayN=active.filter(x=>x.date===today).length;
   const card=x=>{const cls=x.date<today?'overdue':x.date===today?'due':'';const label=x.source==='agenda'?'🏢 Agenda Perusahaan':'📨 Pesan Pribadi';return `<div class="hr-reminder-card ${cls}"><div class="hr-reminder-top"><div><div class="hr-reminder-title">${v9Esc(x.title)}</div><div class="hr-reminder-meta">📅 ${v9Esc(x.date)}${x.time?` • ⏰ ${v9Esc(x.time)}`:''}${x.meta?` • ${v9Esc(x.meta)}`:''}</div></div><span class="hr-reminder-type">${label}</span></div>${x.detail?`<div style="font-size:10px;color:#475569;margin-top:8px;line-height:1.5">${v9Esc(x.detail)}</div>`:''}<div class="hr-reminder-actions"><button class="btn success" onclick="v9MarkHrAgendaDone('${x.key}')">✅ Selesai</button></div></div>`};
-  container.innerHTML=`<div class="hr-agenda-notice"><span>🔔</span><span>Agenda Perusahaan dan Pesan Pribadi yang memiliki tanggal otomatis masuk ke Agenda HR sampai ditandai selesai.</span></div><div class="hr-reminder-summary"><div class="box"><strong>${active.length}</strong><span>Pengingat Aktif</span></div><div class="box"><strong>${todayN}</strong><span>Hari Ini</span></div><div class="box"><strong>${overdue}</strong><span>Terlambat</span></div></div><h2 class="section-title">Agenda HR Aktif</h2>${active.length?active.map(card).join(''):'<div class="empty">Tidak ada pengingat Agenda HR aktif.</div>'}<h2 class="section-title">Riwayat Selesai</h2>${done.length?done.slice(0,20).map(x=>`<div class="hr-reminder-card" style="opacity:.72"><div class="hr-reminder-top"><div><div class="hr-reminder-title">${v9Esc(x.title)}</div><div class="hr-reminder-meta">📅 ${v9Esc(x.date)} • ${x.source==='agenda'?'Agenda Perusahaan':'Pesan Pribadi'}</div></div><span class="hr-reminder-type">Selesai</span></div><div class="hr-reminder-actions"><button class="btn secondary" onclick="v9ReopenHrAgenda('${x.key}')">↩️ Aktifkan Lagi</button></div></div>`).join(''):'<div class="empty">Belum ada pengingat yang diselesaikan.</div>'}`;
+  container.innerHTML=`<div class="hr-agenda-notice"><span>🔔</span><span>Agenda Perusahaan otomatis masuk ke Agenda HR sampai ditandai selesai.</span></div><div class="hr-reminder-summary"><div class="box"><strong>${active.length}</strong><span>Pengingat Aktif</span></div><div class="box"><strong>${todayN}</strong><span>Hari Ini</span></div><div class="box"><strong>${overdue}</strong><span>Terlambat</span></div></div><h2 class="section-title">Agenda HR Aktif</h2>${active.length?active.map(card).join(''):'<div class="empty">Tidak ada pengingat Agenda HR aktif.</div>'}<h2 class="section-title">Riwayat Selesai</h2>${done.length?done.slice(0,20).map(x=>`<div class="hr-reminder-card" style="opacity:.72"><div class="hr-reminder-top"><div><div class="hr-reminder-title">${v9Esc(x.title)}</div><div class="hr-reminder-meta">📅 ${v9Esc(x.date)} • ${x.source==='agenda'?'Agenda Perusahaan':'Pesan Pribadi'}</div></div><span class="hr-reminder-type">Selesai</span></div><div class="hr-reminder-actions"><button class="btn secondary" onclick="v9ReopenHrAgenda('${x.key}')">↩️ Aktifkan Lagi</button></div></div>`).join(''):'<div class="empty">Belum ada pengingat yang diselesaikan.</div>'}`;
 }
 
 // Laporan Bulanan menjadi inbox HR: badge hanya untuk yang belum ditinjau.
@@ -3454,7 +3454,6 @@ renderAgendaTab=function(){
     isHrGrid=true;
     tabs=`<div class="agenda-menu-grid">
       <button class="agenda-menu-item ${state.agendaSubTab==='hragenda'?'active':''}" onclick="switchAgendaSubTab('hragenda')">🔔 Agenda HR${v9HrAgendaBadgeCount()?` <span class="count">(${v9HrAgendaBadgeCount()})</span>`:''}</button>
-      <button class="agenda-menu-item ${state.agendaSubTab==='messages'?'active':''}" onclick="switchAgendaSubTab('messages')">✉️ Pesan Pribadi</button>
       <button class="agenda-menu-item ${state.agendaSubTab==='kegiatan'?'active':''}" onclick="switchAgendaSubTab('kegiatan')">✨ Kegiatan</button>
       <button class="agenda-menu-item ${state.agendaSubTab==='broadcast'?'active':''}" onclick="switchAgendaSubTab('broadcast')">📢 Broadcast</button>
     </div>
@@ -5294,7 +5293,7 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
   /* ===== Beranda HR: kelompokkan menu (bisa dilipat) ===== */
   const GROUPS=[
     ['act','Tindakan harian',['Pemeriksaan Absensi','Koreksi XP','Kehadiran Saya','Tinjau Koreksi Absensi'],true],
-    ['team','Tim & Kinerja',['Ide & Kontribusi','Catatan Leader','Laporan Bulanan','Detail Performa','Skor & Penyebab'],false],
+    ['team','Tim & Kinerja',['Ide & Kontribusi','Catat Kontribusi','Catatan Leader','Laporan Bulanan','Detail Performa','Skor & Penyebab'],false],
     ['comm','Komunikasi',['Pesan Pribadi','Pesan Anonim'],false],
     ['adm','Administrasi',['Kelola Pengguna','Menu Reset Data'],false]
   ];
@@ -5318,7 +5317,7 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
   };
   const GR={blue:'linear-gradient(135deg,#2563eb,#06b6d4)',violet:'linear-gradient(135deg,#7c3aed,#ec4899)',green:'linear-gradient(135deg,#059669,#34d399)',slate:'linear-gradient(135deg,#475569,#0f172a)',amber:'linear-gradient(135deg,#f59e0b,#f97316)',red:'linear-gradient(135deg,#dc2626,#f97316)',teal:'linear-gradient(135deg,#0d9488,#22d3ee)',indigo:'linear-gradient(135deg,#4f46e5,#818cf8)'};
   const TILE_ICON={'Pemeriksaan Absensi':['clip','amber'],'Koreksi XP':['sliders','indigo'],'Kehadiran Saya':['cal','teal'],'Tinjau Koreksi Absensi':['note','amber'],
-    'Ide & Kontribusi':['bulb','amber'],'Catatan Leader':['note','violet'],'Laporan Bulanan':['doc','indigo'],'Detail Performa':['bars','blue'],'Skor & Penyebab':['trend','teal'],
+    'Ide & Kontribusi':['bulb','amber'],'Catat Kontribusi':['bolt','green'],'Catatan Leader':['note','violet'],'Laporan Bulanan':['doc','indigo'],'Detail Performa':['bars','blue'],'Skor & Penyebab':['trend','teal'],
     'Pesan Pribadi':['msg','green'],'Pesan Anonim':['lock','violet'],'Kelola Pengguna':['users','blue'],'Menu Reset Data':['reset','red']};
   const GROUP_META={act:['bolt','blue','Absensi, XP & kehadiran'],team:['users','violet','Ide, catatan & performa tim'],comm:['msg','green','Pesan pribadi & anonim'],adm:['gear','slate','Pengguna & reset data'],other:['dot','slate','Menu tambahan']};
   const HIDDEN_TILES=['Agenda & Broadcast']; // sudah ada di menu bawah "Agenda"
@@ -5346,6 +5345,11 @@ details.ag12-fold{margin-top:12px}details.ag12-fold>summary{font-size:11px;font-
       const b=document.createElement('button'); b.className='home-tile';
       b.innerHTML='<div class="icon">📨</div><div class="title">Pesan Pribadi</div><div class="desc">Kirim pesan ke satu, beberapa, atau semua karyawan.</div>';
       b.onclick=()=>renderHRMessagesPage(); tiles.push(b);
+    }
+    if(!tiles.some(t=>titleOf(t)==='Catat Kontribusi')){
+      const b=document.createElement('button'); b.className='home-tile';
+      b.innerHTML='<div class="icon">🏅</div><div class="title">Catat Kontribusi</div><div class="desc">Catat kontribusi karyawan yang belum diajukan (XP + KPI).</div>';
+      b.onclick=()=>window.renderHrContribV16(); tiles.push(b);
     }
     if(!tiles.some(t=>titleOf(t)==='Pesan Anonim')){
       const b=document.createElement('button'); b.className='home-tile';
@@ -5807,5 +5811,74 @@ details.an13-t>summary{list-style:none;cursor:pointer}details.an13-t>summary::-w
   function onContent(){try{injectTile();mergeTiles();ensureBars();updateBadges();}catch(e){console.warn('v13 content',e);}}
   new MutationObserver(onContent).observe(document.getElementById('content'),{childList:true});
   const navEl=document.getElementById('bottomNav'); if(navEl) new MutationObserver(()=>{try{updateNavDots();}catch(_){}}).observe(navEl,{childList:true});
+})();
+</script>
+
+<script>
+/* ===== V16: HR mencatat kontribusi karyawan (XP + skor KPI) ===== */
+(function(){
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const todayIso=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Jakarta'});
+  const XP={positive:20,accepted:35,implemented:85};
+  function info(){
+    const kind=document.getElementById('ctKind')?.value, lvl=document.getElementById('ctLevel')?.value, el=document.getElementById('ctInfo'), lw=document.getElementById('ctLevelWrap');
+    if(!el) return;
+    if(lw) lw.style.display=kind==='idea'?'block':'none';
+    if(kind==='idea'){
+      const x=lvl==='HRAccepted'?XP.accepted:XP.implemented;
+      el.innerHTML='<b>+'+x+' XP</b> (sama dengan jalur ide normal: '+(lvl==='HRAccepted'?'ajukan 5 + Leader 10 + diterima HR 20':'ajukan 5 + Leader 10 + diterima HR 20 + diterapkan 50')+'). Masuk skor KPI <b>Ide &amp; Inovasi</b>: '+(lvl==='HRAccepted'?'bernilai 75':'bernilai 100')+' untuk ide ini (dirata-rata dengan ide lain orang tersebut).';
+    }else{
+      el.innerHTML='<b>+'+XP.positive+' XP</b>. Masuk skor KPI <b>Kontribusi Positif</b>: +20 poin per kontribusi (maksimal 100).';
+    }
+  }
+  window.ctInfoV16=info;
+  window.renderHrContribV16=async function(){
+    const me=state.activeProfile; if(!me||String(me.role).toLowerCase()!=='hr') return;
+    try{initUsers();}catch(_){}
+    const users=(state.allUsers||[]).filter(u=>['karyawan','leader'].includes(String(u.role).toLowerCase())&&u.active!==false).sort((a,b)=>String(a.nama).localeCompare(String(b.nama)));
+    const c=document.getElementById('content');
+    c.innerHTML=`<div class="v4-section-head"><strong>🏅 Catat Kontribusi</strong><button class="v4-back" onclick="appBack()">← Beranda</button></div>
+    <div class="card">
+      <div style="font-size:10.5px;color:#64748b;margin-bottom:8px;line-height:1.5">Gunakan bila karyawan berkontribusi tetapi tidak mengajukannya sendiri (contoh: membuat aplikasi yang membantu operasional). XP dan skor KPI dihitung dengan aturan yang sama seperti pengajuan biasa. Karyawan menerima pesan pemberitahuan.</div>
+      <label>Karyawan / Leader</label><select id="ctUser">${users.map(u=>`<option value="${esc(u.nik)}">${esc(u.nama)} — ${esc(roleLabel(u.role))}</option>`).join('')}</select>
+      <label>Jenis kontribusi</label>
+      <select id="ctKind" onchange="ctInfoV16()"><option value="idea">💡 Ide &amp; Inovasi (hasil karya / solusi)</option><option value="positive">🌟 Kontribusi Positif (perbuatan baik / bantuan)</option></select>
+      <div id="ctLevelWrap"><label>Tingkat</label><select id="ctLevel" onchange="ctInfoV16()"><option value="Implemented">Sudah diterapkan / dipakai (disarankan)</option><option value="HRAccepted">Diterima HR (belum diterapkan)</option></select></div>
+      <div id="ctInfo" style="font-size:11px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:10px;padding:8px 10px;margin:8px 0;line-height:1.5"></div>
+      <label>Judul</label><input id="ctTitle" maxlength="120" placeholder="cth. Aplikasi pencatat stok harian">
+      <label>Uraian (apa yang dikerjakan dan manfaatnya)</label><textarea id="ctDesc" rows="4" placeholder="cth. Membuat aplikasi web untuk mencatat stok harian sehingga rekap tidak lagi manual."></textarea>
+      <label>Tanggal kontribusi</label><input type="date" id="ctDate" value="${todayIso()}" max="${todayIso()}">
+      <label>Catatan HR (opsional)</label><input id="ctNote" maxlength="200" placeholder="cth. Dikonfirmasi oleh Leader tim">
+      <button class="btn" id="ctBtn" onclick="ctSubmitV16()">💾 Simpan Kontribusi</button>
+    </div>
+    <h2 class="section-title">Riwayat dicatat HR</h2><div id="ctHist"><div class="muted">⏳ Memuat…</div></div>`;
+    info(); ctLoadHistV16();
+  };
+  window.ctLoadHistV16=async function(){
+    const el=document.getElementById('ctHist'); if(!el) return;
+    const res=await gasCall('hrListContributions',{});
+    if(!res?.ok){el.innerHTML='<div class="empty">Riwayat tidak dapat dimuat.</div>';return;}
+    const rows=res.items||[];
+    el.innerHTML=rows.length?rows.map(r=>`<div class="card"><div style="font-size:12px;font-weight:800">${esc(r.nama)} <span style="color:#059669">· ${esc(r.status)}</span></div><div style="font-size:11px;margin-top:3px">${esc(r.title)}</div><div style="font-size:10px;color:#64748b;margin-top:3px">${esc(r.date)}</div></div>`).join(''):'<div class="empty">Belum ada kontribusi yang dicatat HR.</div>';
+  };
+  window.ctSubmitV16=async function(){
+    const g=id=>(document.getElementById(id)?.value||'').trim();
+    const nik=g('ctUser'),kind=g('ctKind'),level=g('ctLevel'),title=g('ctTitle'),desc=g('ctDesc'),date=g('ctDate'),note=g('ctNote');
+    if(!nik){showToast('⚠️ Pilih karyawan.');return;}
+    if(title.length<3){showToast('⚠️ Judul wajib diisi.');return;}
+    if(desc.length<10){showToast('⚠️ Uraian wajib diisi (min. 10 karakter).');return;}
+    if(!date||date>todayIso()){showToast('⚠️ Tanggal tidak valid.');return;}
+    const u=(state.allUsers||[]).find(x=>String(x.nik)===nik), xp=kind==='positive'?XP.positive:(level==='HRAccepted'?XP.accepted:XP.implemented);
+    if(!confirm('Catat kontribusi untuk '+(u?u.nama:nik)+'?\n\n'+title+'\n+'+xp+' XP dan masuk perhitungan KPI.'))return;
+    const btn=document.getElementById('ctBtn'); if(btn)btn.disabled=true;
+    showToast('⏳ Menyimpan…');
+    const res=await gasCall('hrAddContribution',{nik,kind,level,title,desc,date,note});
+    if(btn)btn.disabled=false;
+    if(!res?.ok){showToast('❌ '+(res?.message||res?.error||'Gagal menyimpan kontribusi.'));return;}
+    if(u&&res.user){u.xp=res.user.xp;try{localStorage.setItem('registered_users',JSON.stringify(state.allUsers));}catch(_){}}
+    showToast('✅ Tersimpan: +'+res.xpAdded+' XP'+(res.kpiBefore!==res.kpiAfter?' • KPI '+res.kpiBefore+' → '+res.kpiAfter:' • KPI tetap '+res.kpiAfter)+'.');
+    ['ctTitle','ctDesc','ctNote'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+    ctLoadHistV16();
+  };
 })();
 </script>
