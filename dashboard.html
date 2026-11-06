@@ -58,6 +58,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
 .donut>.hole{position:absolute;inset:24px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .hdr{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;justify-content:space-between;padding:12px 18px;border-radius:16px;background:linear-gradient(120deg,#DCE8FB 0%,#E6EEFB 45%,#E9F5F0 100%);border:1px solid #CFDDF3}
 .chip{display:flex;align-items:center;gap:7px;padding:6px 11px;background:#fff;border:1px solid #CFDDF3;border-radius:10px;font-size:12px;color:var(--mut);min-height:34px}
+.note{padding:9px 14px;border-radius:10px;background:#EAF1FE;color:var(--infot);font-size:12.5px;font-weight:600;cursor:pointer}
 .banner{padding:9px 14px;border-radius:10px;background:#FFF2DC;color:var(--warnt);font-size:12.5px;font-weight:600}
 .err{padding:9px 14px;border-radius:10px;background:#FDECEA;color:var(--badt);font-size:12.5px;font-weight:600}
 /* panel tim */
@@ -230,7 +231,10 @@ async function load(){
   S.data = res; $('liveDot').style.background = '#2FA36B';
   S.teams = S.teams.filter(i => i < res.teams.length);
   if (!S.from) applyPreset('h'); else applyPreset('c');
-  $('msg').innerHTML = res.holiday ? '<div class="banner">Hari ini hari libur nasional. Angka "belum presensi" tidak dihitung.</div>' : '';
+  const ns = res.noSchedule || [];
+  $('msg').innerHTML = (res.holiday ? '<div class="banner">Hari ini hari libur nasional. Angka "belum presensi" tidak dihitung.</div>' : '') +
+    (ns.length ? '<details class="note"><summary>ℹ️ ' + ns.length + ' orang tidak ikut dihitung "belum presensi" karena jadwalnya tidak terbaca</summary><div class="small" style="padding-top:6px;line-height:1.5">Nama di akun kemungkinan berbeda dengan nama di tab jadwal bulan ini (atau nama ganda). Perbaiki namanya agar ikut terdeteksi: <b>' + ns.map(esc).join(', ') + '</b>. Jika orang ini tetap presensi, datanya tetap terhitung.</div></details>' : '') +
+    '<div class="small" style="padding:2px 4px">"Belum presensi" hanya dihitung setelah jam mulai shift (pagi 07.00, middle 13.00, sore 15.00, malam 23.00).</div>';
   const t = new Date(res.generatedAt);
   $('stamp').textContent = 'Dihitung ' + (isNaN(t) ? '' : t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.')) + ' · otomatis tiap 10 menit';
   render();
