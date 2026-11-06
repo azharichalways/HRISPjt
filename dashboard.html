@@ -61,8 +61,13 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
 .banner{padding:9px 14px;border-radius:10px;background:#FFF2DC;color:var(--warnt);font-size:12.5px;font-weight:600}
 .err{padding:9px 14px;border-radius:10px;background:#FDECEA;color:var(--badt);font-size:12.5px;font-weight:600}
 /* panel tim */
+.ddwrap{position:relative;display:inline-block}
+.dd{position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:310px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 34px rgba(27,43,75,.18);display:flex;flex-direction:column}
+.ddhead{padding:10px 12px 8px;border-bottom:1px solid var(--line2)}
+.ddlist{max-height:min(46vh,340px);overflow-y:auto;padding:4px 6px}
+.ddfoot{display:flex;justify-content:space-between;gap:8px;padding:8px 12px;border-top:1px solid var(--line2)}
 .tpanel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:8px}
-.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px}
+.tgrid{display:block}
 .tchk{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:12.5px;min-width:0;cursor:pointer;border-radius:8px}
 .tchk:hover{background:#F3F7FD}
 .tchk input{width:16px;height:16px;flex:0 0 16px;accent-color:var(--pri)}
@@ -113,7 +118,6 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
   <div id="msg"></div>
 
   <div id="filters" class="tool"></div>
-  <div id="tpanel"></div>
   <div id="kpis" class="row"></div>
   <div id="drill"></div>
 
@@ -208,7 +212,7 @@ const SEG = [
 const PRESETS = [['h','Hari ini'],['w','7 hari'],['m','30 hari']];
 const METRICS = [['tepat','Tepat waktu','#2FA36B'],['terlambat','Terlambat','#F0A23B'],['alpha','Alpha','#E5584B']];
 
-const S = { data:null, preset:'h', from:'', to:'', teams:[], tpOpen:false, tSort:'az', barsOpen:true, metric:'tepat', drill:null, drillAll:false, sort:'xp', dir:-1, rankAll:false, timer:null, loading:false, C:null };
+const S = { data:null, preset:'c', from:'', to:'', teams:[], tpOpen:false, tSort:'az', barsOpen:true, metric:'tepat', drill:null, drillAll:false, sort:'xp', dir:-1, rankAll:false, timer:null, loading:false, C:null };
 
 /* ====== PENGAMBILAN DATA ====== */
 async function load(){
@@ -225,7 +229,7 @@ async function load(){
   }
   S.data = res; $('liveDot').style.background = '#2FA36B';
   S.teams = S.teams.filter(i => i < res.teams.length);
-  applyPreset(S.preset === 'c' ? 'c' : S.preset, true);
+  if (!S.from) applyPreset('h'); else applyPreset('c');
   $('msg').innerHTML = res.holiday ? '<div class="banner">Hari ini hari libur nasional. Angka "belum presensi" tidak dihitung.</div>' : '';
   const t = new Date(res.generatedAt);
   $('stamp').textContent = 'Dihitung ' + (isNaN(t) ? '' : t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }).replace(':', '.')) + ' · otomatis tiap 10 menit';
@@ -299,13 +303,12 @@ function render(){
 const pill = (on, label, attr) => '<button type="button" class="pill' + (on ? ' on' : '') + '" ' + attr + '>' + esc(label) + '</button>';
 
 function renderFilters(){
-  const D = S.data, lo = D.dates[0], hi = D.dates[D.dates.length - 1], c = S.preset === 'c';
-  let h = '<span class="lbl">Periode</span>' + PRESETS.map(p => pill(S.preset === p[0], p[1], 'data-preset="' + p[0] + '"')).join('');
-  h += '<span class="lbl" style="margin-left:4px">Tanggal</span>' +
-    '<input type="date" class="date' + (c ? ' on' : '') + '" id="dFrom" value="' + S.from + '" min="' + lo + '" max="' + hi + '" aria-label="Dari tanggal">' +
+  const D = S.data, lo = D.dates[0], hi = D.dates[D.dates.length - 1];
+  let h = '<span class="lbl">Periode</span>' +
+    '<input type="date" class="date" id="dFrom" value="' + S.from + '" min="' + lo + '" max="' + hi + '" aria-label="Dari tanggal">' +
     '<span class="lbl">s/d</span>' +
-    '<input type="date" class="date' + (c ? ' on' : '') + '" id="dTo" value="' + S.to + '" min="' + lo + '" max="' + hi + '" aria-label="Sampai tanggal">';
-  h += '<span class="lbl" style="margin-left:8px">Tim</span><button type="button" class="pill' + (S.teams.length ? ' on' : '') + '" data-act="tpanel">' + esc(teamText()) + (S.teams.length ? '' : ' (' + D.teams.length + ')') + ' ' + (S.tpOpen ? '▴' : '▾') + '</button>';
+    '<input type="date" class="date" id="dTo" value="' + S.to + '" min="' + lo + '" max="' + hi + '" aria-label="Sampai tanggal">';
+  h += '<span class="lbl" style="margin-left:8px">Tim</span><span class="ddwrap"><button type="button" class="pill' + (S.teams.length ? ' on' : '') + '" data-act="tpanel" aria-haspopup="true" aria-expanded="' + S.tpOpen + '">' + esc(teamText()) + (S.teams.length ? '' : ' (' + D.teams.length + ')') + ' ' + (S.tpOpen ? '▴' : '▾') + '</button><div id="tpanel"></div></span>';
   $('filters').innerHTML = h;
 }
 
@@ -316,17 +319,16 @@ function sortedTeamIdx(){
   return idx;
 }
 function renderTeamPanel(){
-  const el = $('tpanel');
+  const el = $('tpanel'); if (!el) return;
   if (!S.tpOpen) { el.innerHTML = ''; return; }
-  const D = S.data, sorts = [['az','A–Z'],['asc','Tepat terendah'],['desc','Tepat tertinggi']];
-  let h = '<div class="tpanel"><div class="tool" style="justify-content:space-between"><div class="tool"><span class="lbl">Urutkan</span>' +
-    sorts.map(s => pill(S.tSort === s[0], s[1], 'data-tsort="' + s[0] + '"')).join('') + '</div><div class="tool">' +
-    '<button type="button" class="btn" data-act="tAll">Semua tim</button><button type="button" class="btn soft" data-act="tpanel">Minimalkan ▴</button></div></div><div class="tgrid">';
+  const D = S.data, sorts = [['az','A–Z'],['asc','Terendah'],['desc','Tertinggi']];
+  let h = '<div class="dd" role="menu"><div class="ddhead"><div class="tool" style="gap:6px"><span class="lbl">Urutkan</span>' +
+    sorts.map(s => pill(S.tSort === s[0], s[1], 'data-tsort="' + s[0] + '"')).join('') + '</div></div><div class="ddlist">';
   sortedTeamIdx().forEach(i => {
     const p = teamPct(S.C.team[i]), on = S.teams.indexOf(i) >= 0;
     h += '<label class="tchk"><input type="checkbox" data-tchk="' + i + '"' + (on ? ' checked' : '') + '><span class="ell" title="' + esc(D.teams[i]) + '">' + esc(D.teams[i]) + '</span><span class="p">' + (p == null ? '-' : p.toFixed(0) + '%') + '</span></label>';
   });
-  el.innerHTML = h + '</div></div>';
+  el.innerHTML = h + '</div><div class="ddfoot"><button type="button" class="btn" data-act="tAll">Semua tim</button><button type="button" class="btn soft" data-act="tpanel">Tutup</button></div></div>';
 }
 
 function renderKpis(){
@@ -352,7 +354,7 @@ function drillRows(i){
       detail = (i <= 1 && /^\d{4}$/.test(t)) ? date + ' ' + t.slice(0, 2) + ':' + t.slice(2) : date;
     } else {
       const days = []; for (let k = i0; k <= i1; k++) if (r.u.d.charCodeAt(k) - 48 === i) days.push(k);
-      detail = days.length <= 3 ? days.map(k => dLabel(D.dates[k])).join(', ') : days.length + ' hari';
+      detail = days.length + ' hari';
     }
     out.push({ name: r.u.n, team: D.teams[r.u.t], detail, n });
   });
@@ -481,10 +483,10 @@ function exportDrill(){
 
 /* ====== EVENT ====== */
 document.addEventListener('click', e => {
+  if (S.tpOpen && !e.target.closest('.ddwrap')) { S.tpOpen = false; renderFilters(); renderTeamPanel(); }
   const t = e.target.closest('button'); if (!t) return;
   const ds = t.dataset;
-  if (ds.preset) { applyPreset(ds.preset); S.drillAll = false; render(); }
-  else if (ds.tsort) { S.tSort = ds.tsort; renderTeamPanel(); renderTeams(); }
+  if (ds.tsort) { S.tSort = ds.tsort; renderTeamPanel(); renderTeams(); }
   else if (ds.bar !== undefined) { const i = Number(ds.bar); S.teams = (S.teams.length === 1 && S.teams[0] === i) ? [] : [i]; S.drillAll = false; render(); }
   else if (ds.metric) { S.metric = ds.metric; renderTrend(); }
   else if (ds.drill !== undefined) { const i = Number(ds.drill); S.drill = S.drill === i ? null : i; S.drillAll = false; renderKpis(); renderDrill(); renderDonut(); if (S.drill != null) $('drill').scrollIntoView({ behavior:'smooth', block:'nearest' }); }
@@ -497,12 +499,15 @@ document.addEventListener('click', e => {
   else if (ds.act === 'csvDrill') exportDrill();
   else if (ds.act === 'rankAll') { S.rankAll = !S.rankAll; renderRank(); }
 });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.tpOpen) { S.tpOpen = false; renderFilters(); renderTeamPanel(); } });
 document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset && el.dataset.tchk !== undefined) {
     const i = Number(el.dataset.tchk), k = S.teams.indexOf(i);
     if (el.checked && k < 0) S.teams.push(i); else if (!el.checked && k >= 0) S.teams.splice(k, 1);
-    S.teams.sort((a, b) => a - b); S.drillAll = false; render();
+    S.teams.sort((a, b) => a - b); S.drillAll = false;
+    const lst = document.querySelector('.ddlist'), st = lst ? lst.scrollTop : 0;
+    render(); const l2 = document.querySelector('.ddlist'); if (l2) l2.scrollTop = st;
   } else if (el.id === 'dFrom' || el.id === 'dTo') {
     const f = $('dFrom').value, t = $('dTo').value;
     if (!f || !t) return;
