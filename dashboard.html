@@ -126,6 +126,20 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
   .ddwrap.r .dd{left:auto;right:0}
   .kpi{padding:8px 10px;flex:1 1 140px}
 }
+
+/* ====== V10.7.0 Laporan Penggajian ====== */
+.pr-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pr-bar select,.pr-bar input{padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12.5px;min-height:34px}
+.pr-scroll{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:10px}
+.pr-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.pr-tbl th,.pr-tbl td{padding:7px 8px;border-bottom:1px solid var(--line2);text-align:center;white-space:nowrap}
+.pr-tbl th{position:sticky;top:0;background:#F3F6FB;cursor:pointer;font-weight:700;color:var(--mut);user-select:none}
+.pr-tbl td.nm,.pr-tbl th.nm{text-align:left}
+.pr-tbl tr.tot td{font-weight:800;background:#F3F6FB;position:sticky;bottom:0}
+.pr-tbl .a{color:var(--badt);font-weight:700}.pr-tbl .b{color:var(--warnt);font-weight:700}
+.pr-badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+.pr-badge.fin{background:#E3F4EC;color:var(--okt)}.pr-badge.tmp{background:#FDF1DD;color:var(--warnt)}
+.btn.xl{background:#1E7F52;border-color:#1E7F52;color:#fff}.btn[disabled]{opacity:.55;cursor:wait}
 </style>
 </head>
 <body>
@@ -156,7 +170,6 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
       <div class="chip" title="Waktu perhitungan terakhir (otomatis tiap 10 menit)"><span id="liveDot" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span><span id="stamp">Memuat…</span></div>
       <div class="chip ro" title="Hanya-baca: dashboard ini tidak dapat mengubah data" style="background:#E3F4EC;border-color:#BFE3D0;color:var(--okt);font-weight:700"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="lab">Hanya-baca</span></div>
       <button class="btn ibtn" id="btnReload" type="button" title="Muat ulang" aria-label="Muat ulang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span class="lab">Muat ulang</span></button>
-      <button class="btn pri ibtn" id="btnCsv" type="button" title="Ekspor CSV" aria-label="Ekspor CSV"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></svg><span class="lab">Ekspor CSV</span></button>
       <button class="btn ibtn" id="btnOut" type="button" title="Keluar" aria-label="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg><span class="lab">Keluar</span></button>
     </div>
   </div>
@@ -219,6 +232,29 @@ button:focus-visible,input:focus-visible{outline:3px solid #9DB4F5;outline-offse
       <div class="small" style="line-height:1.45">Pesan anonim, pesan pribadi, catatan Leader, foto, dan lokasi GPS tidak pernah tampil di dashboard ini.</div></div>
   </div>
 
+
+  <div class="card" id="payCard">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center">
+      <div><h2 class="h2">Laporan penggajian · rekap bulanan</h2>
+        <div class="sub">Cut-off otomatis akhir bulan (28/29/30/31, Februari mengikuti kalender). Hari kerja, libur, terlambat, belum presensi, dan alpha per karyawan.</div></div>
+      <span id="prStat"></span>
+    </div>
+    <div class="pr-bar">
+      <select id="prMonth" aria-label="Bulan"></select>
+      <input id="prSearch" placeholder="Cari nama karyawan / tim" aria-label="Cari karyawan" style="flex:1 1 180px">
+      <select id="prSort" aria-label="Urutkan">
+        <option value="n:1">Nama A → Z</option><option value="n:-1">Nama Z → A</option><option value="tim:1">Tim</option>
+        <option value="a:-1">Alpha terbanyak</option><option value="t:-1">Terlambat terbanyak</option><option value="b:-1">Belum presensi terbanyak</option>
+      </select>
+      <button class="btn xl" id="prXlsx" type="button">⬇ Unduh Excel (.xlsx)</button>
+      <button class="btn" id="prCsv" type="button">CSV</button>
+      <button class="btn" id="prPrint" type="button">Cetak / PDF</button>
+    </div>
+    <div id="prMeta" class="small"></div>
+    <div id="prBody"><div class="small" style="padding:12px">Memuat…</div></div>
+    <div class="small" style="line-height:1.5">Hari Kerja = Hadir + Belum Presensi + Alpha. Terlambat termasuk dalam Hadir. “Belum Presensi” = hari kerja yang belum terselesaikan (mis. menunggu pemeriksaan HR). Unduhan mengikuti pencarian dan urutan yang sedang tampil. Bulan berjalan berstatus SEMENTARA sampai cut-off tercapai.</div>
+  </div>
+
   <div class="small" style="text-align:center">Data dibaca dari spreadsheet dan diperbarui otomatis tiap 10 menit · dashboard ini tidak dapat mengubah data.</div>
 </div>
 
@@ -238,6 +274,14 @@ const dLabel = d => Number(d.slice(8)) + ' ' + BULAN[Number(d.slice(5, 7)) - 1];
 const dLong = d => dLabel(d) + ' ' + d.slice(0, 4);
 
 async function api(action, payload){
+  let r = await api1(action, payload);
+  if (r && !r.ok && /terlalu lama|Tidak bisa menghubungi/.test(String(r.error || ''))) {   // dashboard hanya membaca: aman diulang satu kali
+    await new Promise(x => setTimeout(x, 800)); r = await api1(action, payload);
+    if (r && !r.ok && /terlalu lama/.test(String(r.error || ''))) r.error = 'Server sedang sibuk. Muat ulang sebentar lagi.';
+  }
+  return r;
+}
+async function api1(action, payload){
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 60000);
   try {
     const res = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -253,7 +297,7 @@ const SEG = [
   { label:'Terlambat',            fill:'#F0A23B', text:'#9A5B0B' },
   { label:'Belum presensi',       fill:'#6F8FD8', text:'#3A5BB0' },
   { label:'Alpha',                fill:'#E5584B', text:'#B73A2E' },
-  { label:'Libur / sakit / cuti', fill:'#A99BE0', text:'#6A58B8' }
+  { label:'Libur / sakit / cuti', fill:'#CBD5E1', text:'#5B6880' }
 ];
 const PRESETS = [['h','Hari ini'],['w','7 hari'],['m','30 hari']];
 const METRICS = [['tepat','Tepat waktu','#2FA36B'],['terlambat','Terlambat','#F0A23B'],['alpha','Alpha','#E5584B']];
@@ -646,8 +690,165 @@ document.addEventListener('change', e => {
     render(); const l2 = document.querySelector('.ddlist'); if (l2) l2.scrollTop = st;
   }
 });
-$('btnReload').onclick = () => load();
-$('btnCsv').onclick = () => S.data && exportAll();
+
+/* ====== V10.7.0 LAPORAN PENGGAJIAN ====== */
+const PR = { data:null, month:'', sort:'n', dir:1, q:'', loading:false };
+const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const prMonthLabel = m => BLN[Number(m.slice(5,7)) - 1] + ' ' + m.slice(0,4);
+function prInitMonths(){
+  const now = new Date(Date.now() + 7*3600e3), sel = $('prMonth'); let o = '';
+  for (let i = 0; i < 18; i++) { const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const v = d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2); o += '<option value="' + v + '">' + prMonthLabel(v) + '</option>'; }
+  sel.innerHTML = o; PR.month = sel.value;
+}
+async function prLoad(){
+  if (PR.loading) return; PR.loading = true; PR.month = $('prMonth').value;
+  $('prBody').innerHTML = '<div class="small" style="padding:12px">⏳ Menghitung rekap ' + esc(prMonthLabel(PR.month)) + '…</div>';
+  const r = await api('payrollRecap', { month: PR.month });
+  PR.loading = false;
+  if (r && r.error === 'SESSION_EXPIRED') { logout(true); return; }
+  if (!r || !r.ok) { PR.data = null; $('prBody').innerHTML = '<div style="color:var(--badt);padding:12px">⛔ ' + esc((r && (r.message || r.error)) || 'Gagal memuat rekap.') + '</div>'; return; }
+  PR.data = r; prPaint();
+}
+function prRows(){
+  const r = PR.data; if (!r) return [];
+  const q = PR.q.toLowerCase(), k = PR.sort, d = PR.dir;
+  return r.users.filter(u => !q || (u.n + ' ' + u.tim).toLowerCase().includes(q))
+    .sort((a, b) => (typeof a[k] === 'string' ? String(a[k]).localeCompare(String(b[k]), 'id', {sensitivity:'base'}) : a[k] - b[k]) * d || a.n.localeCompare(b.n, 'id', {sensitivity:'base'}));
+}
+function prPaint(){
+  const r = PR.data; if (!r) return;
+  $('prStat').innerHTML = r.final ? '<span class="pr-badge fin">FINAL · cut-off ' + esc(dLong(r.end)) + '</span>' : '<span class="pr-badge tmp">SEMENTARA' + (r.upTo ? ' · s.d. ' + esc(dLong(r.upTo)) : '') + '</span>';
+  $('prMeta').textContent = prMonthLabel(r.month) + ' · periode ' + dLong(r.start) + ' s.d. ' + dLong(r.end) + ' (' + r.daysInMonth + ' hari) · dihitung ' + r.counted + ' hari';
+  if (!r.users.length) { $('prBody').innerHTML = '<div class="small" style="padding:12px">' + esc(r.message || 'Belum ada data.') + '</div>'; return; }
+  const rows = prRows(), S = f => rows.reduce((a, u) => a + u[f], 0);
+  const cols = [['n','Nama'],['tim','Tim'],['kw','Hari Kerja'],['h','Hadir'],['t','Terlambat'],['b','Belum Presensi'],['a','Alpha'],['l','Libur'],['s','Sakit'],['c','Cuti/Izin']];
+  const ar = k => PR.sort === k ? (PR.dir > 0 ? ' ▲' : ' ▼') : '';
+  $('prBody').innerHTML = '<div class="pr-scroll"><table class="pr-tbl"><thead><tr>' + cols.map(([f, l]) => '<th class="' + (f === 'n' || f === 'tim' ? 'nm' : '') + '" data-prs="' + f + '">' + l + ar(f) + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(u => '<tr><td class="nm">' + esc(u.n) + '</td><td class="nm">' + esc(u.tim) + '</td><td>' + u.kw + '</td><td>' + u.h + '</td><td>' + u.t + '</td><td class="' + (u.b ? 'b' : '') + '">' + u.b + '</td><td class="' + (u.a ? 'a' : '') + '">' + u.a + '</td><td>' + u.l + '</td><td>' + u.s + '</td><td>' + u.c + '</td></tr>').join('') +
+    '<tr class="tot"><td class="nm">Total (' + rows.length + ' karyawan)</td><td></td><td>' + S('kw') + '</td><td>' + S('h') + '</td><td>' + S('t') + '</td><td>' + S('b') + '</td><td>' + S('a') + '</td><td>' + S('l') + '</td><td>' + S('s') + '</td><td>' + S('c') + '</td></tr></tbody></table></div>' +
+    (r.noSchedule && r.noSchedule.length ? '<div class="small" style="color:var(--warnt)">⚠ Jadwal tidak terbaca untuk: ' + r.noSchedule.map(esc).join(', ') + '. Hari tanpa catatan dihitung “Belum Presensi”.</div>' : '');
+}
+function prFile(ext){ return 'Rekap_Penggajian_' + PR.month + (PR.data && !PR.data.final ? '_SEMENTARA' : '') + '.' + ext; }
+function prSave(blob, name){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); }
+function prCsv(){
+  const r = PR.data, rows = prRows(); if (!r || !rows.length) return;
+  const showNik = r.canSeeNik, q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['No'].concat(showNik ? ['NIK'] : [], ['Nama','Tim','Hari Kerja','Hadir Tepat Waktu','Terlambat','Belum Presensi','Alpha','Libur','Sakit','Cuti/Izin']);
+  const lines = [head.map(q).join(';')];
+  rows.forEach((u, i) => lines.push([i + 1].concat(showNik ? [u.nik] : [], [u.n, u.tim, u.kw, u.h - u.t, u.t, u.b, u.a, u.l, u.s, u.c]).map(q).join(';')));
+  prSave(new Blob(['﻿' + 'sep=;\r\n' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'}), prFile('csv'));
+}
+function prLoadLib(){
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    s.onload = ok; s.onerror = () => no(new Error('Pustaka Excel gagal dimuat (cek internet).')); document.head.appendChild(s); });
+}
+async function prXlsx(){
+  const r = PR.data, rows = prRows(); if (!r || !rows.length) return;
+  const btn = $('prXlsx'), old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Menyusun Excel…';
+  try {
+    await prLoadLib();
+    const wb = new ExcelJS.Workbook(); wb.creator = r.company; wb.created = new Date(); wb.title = 'Rekap Kehadiran untuk Penggajian ' + prMonthLabel(r.month);
+    const NAVY = 'FF1B2B4B', HEAD = 'FF3B5BDB', GREY = 'FFF3F6FB', thin = {style:'thin', color:{argb:'FFC9D3E3'}};
+    const border = {top:thin, left:thin, bottom:thin, right:thin};
+    const showNik = !!r.canSeeNik;
+    const status = r.final ? 'FINAL (cut-off tercapai)' : 'SEMENTARA' + (r.upTo ? ' (dihitung s.d. ' + dLong(r.upTo) + ')' : '');
+    const gen = new Date(r.generatedAt || Date.now()).toLocaleString('id-ID', {dateStyle:'long', timeStyle:'short', timeZone:'Asia/Jakarta'}) + ' WIB';
+
+    /* ---- Sheet 1: Ringkasan ---- */
+    const ws = wb.addWorksheet('Ringkasan', {views:[{state:'frozen', ySplit:7, showGridLines:false}], pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0, margins:{left:.4, right:.4, top:.6, bottom:.6, header:.3, footer:.3}}});
+    const heads = ['No'].concat(showNik ? ['NIK'] : [], ['Nama Karyawan','Tim','Hari Kerja','Hadir Tepat Waktu','Terlambat','Belum Presensi','Alpha','Libur','Sakit','Cuti/Izin']);
+    const nC = heads.length, last = String.fromCharCode(64 + nC);
+    ws.mergeCells('A1:' + last + '1'); ws.getCell('A1').value = String(r.company).toUpperCase(); ws.getCell('A1').font = {name:'Calibri', size:11, bold:true, color:{argb:'FF3A5BB0'}};
+    ws.mergeCells('A2:' + last + '2'); ws.getCell('A2').value = 'REKAP KEHADIRAN UNTUK PENGGAJIAN'; ws.getCell('A2').font = {name:'Calibri', size:16, bold:true, color:{argb:NAVY}}; ws.getRow(2).height = 24;
+    ws.mergeCells('A3:' + last + '3'); ws.getCell('A3').value = 'Periode: ' + dLong(r.start) + ' s.d. ' + dLong(r.end) + '  (' + prMonthLabel(r.month) + ', ' + r.daysInMonth + ' hari)';
+    ws.mergeCells('A4:' + last + '4'); ws.getCell('A4').value = 'Status laporan: ' + status;
+    ws.mergeCells('A5:' + last + '5'); ws.getCell('A5').value = 'Dicetak: ' + gen + (r.generatedBy ? ' oleh ' + r.generatedBy : '');
+    ['A3','A4','A5'].forEach(a => ws.getCell(a).font = {name:'Calibri', size:10.5, color:{argb:'FF42506B'}, bold: a === 'A4'});
+    if (!r.final) ws.getCell('A4').font = {name:'Calibri', size:10.5, bold:true, color:{argb:'FF9A5B0B'}};
+    const hr = ws.getRow(7); hr.values = heads; hr.height = 32;
+    hr.eachCell(c => { c.font = {name:'Calibri', bold:true, color:{argb:'FFFFFFFF'}, size:10.5}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; c.alignment = {horizontal:'center', vertical:'middle', wrapText:true}; c.border = border; });
+    const off = showNik ? 1 : 0, cK = 4 + off;               // kolom 'Hari Kerja' (1-based)
+    rows.forEach((u, i) => {
+      const row = ws.addRow([i + 1].concat(showNik ? [u.nik] : [], [u.n, u.tim, u.kw, u.h - u.t, u.t, u.b, u.a, u.l, u.s, u.c]));
+      row.eachCell((c, ci) => { c.font = {name:'Calibri', size:10.5}; c.border = border; c.alignment = {horizontal: (ci === 2 + off || ci === 3 + off) ? 'left' : 'center', vertical:'middle'};
+        if (i % 2) c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFF8FAFD'}}; });
+      const colA = cK + 3 + 1, colB = cK + 3;               // Alpha, Belum Presensi (1-based)
+      if (u.a) row.getCell(colA).font = {name:'Calibri', size:10.5, bold:true, color:{argb:'FFB73A2E'}};
+      if (u.b) row.getCell(colB).font = {name:'Calibri', size:10.5, bold:true, color:{argb:'FF9A5B0B'}};
+    });
+    const f0 = 8, f1 = 7 + rows.length, tr = ws.addRow(['Total (' + rows.length + ' karyawan)']);
+    ws.mergeCells(tr.number, 1, tr.number, cK - 1);
+    for (let k = cK; k <= nC; k++) { const L = String.fromCharCode(64 + k); tr.getCell(k).value = {formula:'SUM(' + L + f0 + ':' + L + f1 + ')', result: rows.reduce((a, u) => a + [u.kw, u.h - u.t, u.t, u.b, u.a, u.l, u.s, u.c][k - cK], 0)}; }
+    tr.eachCell({includeEmpty:true}, (c, ci) => { c.font = {name:'Calibri', bold:true, size:10.5}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFE3EAF4'}}; c.border = border; c.alignment = {horizontal: ci < cK ? 'left' : 'center', vertical:'middle'}; });
+    const wid = showNik ? [5, 13, 28, 20, 11, 13, 11, 12, 9, 9, 9, 10] : [5, 28, 20, 11, 13, 11, 12, 9, 9, 9, 10];
+    wid.forEach((w, i) => ws.getColumn(i + 1).width = w);
+    ws.autoFilter = {from:{row:7, column:1}, to:{row:f1, column:nC}};
+    let nr = tr.number + 2;
+    const notes = ['Keterangan:', 'Hari Kerja = Hadir (Tepat Waktu + Terlambat) + Belum Presensi + Alpha.', 'Belum Presensi = hari kerja yang belum terselesaikan (mis. menunggu pemeriksaan HR) dan perlu dikonfirmasi sebelum penggajian.', 'Libur mencakup libur jadwal, libur nasional, dan cuti yang disetujui; Sakit dan Cuti/Izin ditampilkan terpisah dan tidak menjadi hari kerja.', 'Rincian harian per tanggal ada pada lembar "Rincian Harian".'];
+    notes.forEach((t, i) => { const rr = ws.getRow(nr++); ws.mergeCells(rr.number, 1, rr.number, nC); rr.getCell(1).value = t; rr.getCell(1).font = {name:'Calibri', size:9.5, italic: i > 0, bold: i === 0, color:{argb:'FF42506B'}}; rr.getCell(1).alignment = {wrapText:true, vertical:'top'}; if (i > 0 && t.length > 95) rr.height = 26; });
+    nr += 1;
+    const sig = ws.getRow(nr); ws.mergeCells(nr, 1, nr, Math.floor(nC / 2)); ws.mergeCells(nr, Math.floor(nC / 2) + 1, nr, nC);
+    sig.getCell(1).value = 'Disusun oleh (HR)'; sig.getCell(Math.floor(nC / 2) + 1).value = 'Disetujui oleh';
+    sig.eachCell(c => { c.font = {name:'Calibri', size:10.5, bold:true}; c.alignment = {horizontal:'center'}; });
+    const sg2 = ws.getRow(nr + 5); ws.mergeCells(nr + 5, 1, nr + 5, Math.floor(nC / 2)); ws.mergeCells(nr + 5, Math.floor(nC / 2) + 1, nr + 5, nC);
+    sg2.getCell(1).value = '( ............................ )'; sg2.getCell(Math.floor(nC / 2) + 1).value = '( ............................ )'; sg2.eachCell(c => c.alignment = {horizontal:'center'});
+    ws.headerFooter.oddFooter = '&L' + r.company + ' — Rekap Penggajian ' + prMonthLabel(r.month) + '&RHalaman &P dari &N';
+    ws.pageSetup.printTitlesRow = '7:7';
+
+    /* ---- Sheet 2: Rincian Harian ---- */
+    const wd = wb.addWorksheet('Rincian Harian', {views:[{state:'frozen', xSplit:2 + off, ySplit:4, showGridLines:false}], pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0}});
+    const nd = r.daysInMonth, totC = 2 + off + nd;
+    wd.mergeCells(1, 1, 1, Math.min(totC, 14)); wd.getCell(1).value = 'RINCIAN HARIAN — ' + prMonthLabel(r.month).toUpperCase() + ' · ' + status; wd.getCell(1).font = {name:'Calibri', bold:true, size:13, color:{argb:NAVY}};
+    wd.mergeCells(2, 1, 2, Math.min(totC, 20)); wd.getCell(2).value = 'H = Hadir tepat · T = Terlambat · B = Belum presensi · A = Alpha · L = Libur · S = Sakit · C = Cuti/Izin · kosong = belum terhitung';
+    wd.getCell(2).font = {name:'Calibri', size:9.5, italic:true, color:{argb:'FF42506B'}};
+    const DOW = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    const h3 = ['No'].concat(showNik ? ['NIK'] : [], ['Nama']), h4 = h3.map(() => '');
+    for (let d = 1; d <= nd; d++) { const dt = new Date(Date.UTC(Number(r.month.slice(0,4)), Number(r.month.slice(5,7)) - 1, d)); h3.push(d); h4.push(DOW[dt.getUTCDay()]); }
+    [wd.getRow(3), wd.getRow(4)].forEach((rw, k) => { rw.values = k ? h4 : h3; rw.eachCell(c => { c.font = {name:'Calibri', bold:true, size:9.5, color:{argb:'FFFFFFFF'}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:HEAD}}; c.alignment = {horizontal:'center', vertical:'middle'}; c.border = border; }); });
+    const FILL = {H:'FFD7F0E3', T:'FFFCE7C2', B:'FFD9E3F7', A:'FFF8D0CC', L:'FFFFFFFF', S:'FFFFFFFF', C:'FFFFFFFF'}, FONT = {A:'FFB73A2E', T:'FF9A5B0B', B:'FF3A5BB0', L:'FF64748B', S:'FF64748B', C:'FF64748B'};
+    rows.forEach((u, i) => {
+      const code = (u.d || '').split(''), vals = [i + 1].concat(showNik ? [u.nik] : [], [u.n]);
+      for (let d = 0; d < nd; d++) vals.push(code[d] || '');
+      const row = wd.addRow(vals);
+      row.eachCell((c, ci) => { c.border = border; c.font = {name:'Calibri', size:9.5}; c.alignment = {horizontal: ci === 2 + off ? 'left' : 'center', vertical:'middle'};
+        if (ci > 2 + off) { const v = c.value; if (FILL[v]) { c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:FILL[v]}}; c.font = {name:'Calibri', size:9.5, bold:true, color:{argb:FONT[v] || 'FF1B2B4B'}}; } } });
+    });
+    [5, 5].forEach(() => 0);
+    wd.getColumn(1).width = 5; if (showNik) wd.getColumn(2).width = 12; wd.getColumn(2 + off).width = 26;
+    for (let d = 1; d <= nd; d++) wd.getColumn(2 + off + d).width = 4.3;
+    wd.pageSetup.printTitlesRow = '3:4';
+    wb.views = [{activeTab:0}];
+    const buf = await wb.xlsx.writeBuffer();
+    prSave(new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), prFile('xlsx'));
+  } catch (e) { alert('Gagal membuat Excel: ' + (e && e.message || e) + '\nGunakan tombol CSV atau Cetak / PDF sebagai alternatif.'); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+function prPrint(){
+  const r = PR.data, rows = prRows(); if (!r || !rows.length) return;
+  const showNik = !!r.canSeeNik, S = f => rows.reduce((a, u) => a + u[f], 0);
+  const w = window.open('', '_blank'); if (!w) { alert('Izinkan pop-up untuk mencetak.'); return; }
+  const status = r.final ? 'FINAL (cut-off tercapai)' : 'SEMENTARA' + (r.upTo ? ' (s.d. ' + dLong(r.upTo) + ')' : '');
+  const gen = new Date(r.generatedAt || Date.now()).toLocaleString('id-ID', {dateStyle:'long', timeStyle:'short', timeZone:'Asia/Jakarta'}) + ' WIB';
+  w.document.write('<!doctype html><html lang="id"><head><meta charset="utf-8"><title>' + esc(prFile('pdf')) + '</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,Helvetica,sans-serif;color:#1B2B4B;font-size:11px}h1{font-size:17px;margin:2px 0}.c{color:#3A5BB0;font-weight:700;letter-spacing:.06em;font-size:11px}.m{color:#42506B;margin:2px 0}table{border-collapse:collapse;width:100%;margin-top:10px}th{background:#3B5BDB;color:#fff;padding:6px;border:1px solid #9DB0D8}td{padding:5px 6px;border:1px solid #C9D3E3;text-align:center}td.l{text-align:left}tr:nth-child(even) td{background:#F8FAFD}tr.t td{background:#E3EAF4;font-weight:700}.a{color:#B73A2E;font-weight:700}.b{color:#9A5B0B;font-weight:700}thead{display:table-header-group}tr{page-break-inside:avoid}.s{display:flex;justify-content:space-around;margin-top:40px;text-align:center}.s div{width:30%}.s p{margin-top:56px}.n{margin-top:12px;color:#42506B;font-size:10px;line-height:1.5}</style></head><body>' +
+    '<div class="c">' + esc(String(r.company).toUpperCase()) + '</div><h1>Rekap Kehadiran untuk Penggajian</h1><div class="m">Periode: ' + esc(dLong(r.start)) + ' s.d. ' + esc(dLong(r.end)) + ' (' + esc(prMonthLabel(r.month)) + ')</div><div class="m">Status: <b>' + esc(status) + '</b> · Dicetak: ' + esc(gen) + '</div>' +
+    '<table><thead><tr><th>No</th>' + (showNik ? '<th>NIK</th>' : '') + '<th>Nama Karyawan</th><th>Tim</th><th>Hari Kerja</th><th>Hadir Tepat Waktu</th><th>Terlambat</th><th>Belum Presensi</th><th>Alpha</th><th>Libur</th><th>Sakit</th><th>Cuti/Izin</th></tr></thead><tbody>' +
+    rows.map((u, i) => '<tr><td>' + (i + 1) + '</td>' + (showNik ? '<td>' + esc(u.nik) + '</td>' : '') + '<td class="l">' + esc(u.n) + '</td><td class="l">' + esc(u.tim) + '</td><td>' + u.kw + '</td><td>' + (u.h - u.t) + '</td><td>' + u.t + '</td><td class="' + (u.b ? 'b' : '') + '">' + u.b + '</td><td class="' + (u.a ? 'a' : '') + '">' + u.a + '</td><td>' + u.l + '</td><td>' + u.s + '</td><td>' + u.c + '</td></tr>').join('') +
+    '<tr class="t"><td colspan="' + (showNik ? 4 : 3) + '" class="l">Total (' + rows.length + ' karyawan)</td><td>' + S('kw') + '</td><td>' + (S('h') - S('t')) + '</td><td>' + S('t') + '</td><td>' + S('b') + '</td><td>' + S('a') + '</td><td>' + S('l') + '</td><td>' + S('s') + '</td><td>' + S('c') + '</td></tr></tbody></table>' +
+    '<div class="n">Hari Kerja = Hadir (Tepat Waktu + Terlambat) + Belum Presensi + Alpha. “Belum Presensi” perlu dikonfirmasi sebelum penggajian.</div>' +
+    '<div class="s"><div>Disusun oleh (HR)<p>( ............................ )</p></div><div>Disetujui oleh<p>( ............................ )</p></div></div><script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>');
+  w.document.close();
+}
+prInitMonths();
+$('prMonth').onchange = () => prLoad();
+$('prSearch').oninput = e => { PR.q = e.target.value || ''; prPaint(); };
+$('prSort').onchange = e => { const [k, d] = e.target.value.split(':'); PR.sort = k; PR.dir = Number(d); prPaint(); };
+$('prBody').addEventListener('click', e => { const th = e.target.closest('[data-prs]'); if (!th) return; const k = th.dataset.prs;
+  if (PR.sort === k) PR.dir *= -1; else { PR.sort = k; PR.dir = (k === 'n' || k === 'tim') ? 1 : -1; } prPaint(); });
+$('prXlsx').onclick = prXlsx; $('prCsv').onclick = prCsv; $('prPrint').onclick = prPrint;
+
+$('btnReload').onclick = () => { load(); prLoad(); };
 $('btnOut').onclick = () => logout(false);
 
 /* ====== LOGIN / SESI ====== */
@@ -657,7 +858,7 @@ function showLogin(msg){
   const e = $('lgErr'); if (msg) { e.textContent = msg; e.classList.remove('hide'); } else e.classList.add('hide');
   $('lgPass').value = '';
 }
-function showApp(){ $('login').classList.add('hide'); $('app').classList.remove('hide'); load(); startPolling(); }
+function showApp(){ $('login').classList.add('hide'); $('app').classList.remove('hide'); load(); prLoad(); startPolling(); }
 function logout(expired){
   store.del('ag_session_token'); store.del('active_user_session');
   showLogin(expired ? 'Sesi berakhir. Silakan masuk kembali.' : '');
