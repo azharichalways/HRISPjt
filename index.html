@@ -6572,7 +6572,7 @@ renderAbsenTab=async function(){
   if(tc)tc.outerHTML='<div class="v17-mode">🟢 Absen Masuk</div>';
   const cc=$('content');
   if(cc&&roleOf()!=='hr'&&!$('v17OffCard'))
-    cc.insertAdjacentHTML('beforeend','<div class="card" id="v17OffCard" style="margin-top:12px"><div style="font-size:13px;font-weight:800">Bertugas di luar kantor?</div><div class="v17-note" style="margin:4px 0 8px">Absen masuk bisa di mana saja dan jam berapa saja (tidak mengikuti shift), dengan foto + keterangan. Menunggu konfirmasi HR.</div><button class="btn secondary" id="v17OffBtn" onclick="v17OffOpen(\'masuk\')">📍 Absen Masuk Tugas Luar</button></div>');
+    cc.insertAdjacentHTML('beforeend','<div class="card" id="v17OffCard" style="margin-top:12px"><div style="font-size:13px;font-weight:800">Bertugas di luar kantor?</div><div class="v17-note" style="margin:4px 0 8px">Berdasarkan konfirmasi HR.</div><button class="btn secondary" id="v17OffBtn" onclick="v17OffOpen(\'masuk\')">📍 Absen Masuk Tugas Luar</button></div>');
 };
 // segarkan status di latar belakang (tanpa memblokir layar)
 async function refreshAtt(){const r=await post('attendanceState',{},20000);if(r&&r.attendanceState)window.v17Att={...r.attendanceState,at:Date.now()};}
